@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Anmelden – Vaydena Lager</title>
+<meta name="robots" content="noindex,follow">
+<meta name="theme-color" content="#0b1a24">
+<link rel="icon" href="assets/icons/favicon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+<link rel="stylesheet" href="assets/app.css">
+<style>
+  .authwrap.single{grid-template-columns:1fr;max-width:520px}
+  .pwwrap{position:relative}
+  .pwwrap button{position:absolute;right:8px;top:50%;transform:translateY(-50%);border:0;background:none;color:var(--primary-d);font:inherit;font-size:.85rem;font-weight:700;cursor:pointer;padding:6px 8px}
+  .links{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:.9rem;margin-top:14px}
+  .emailbox{background:var(--bg-2);border-radius:10px;padding:10px 14px;font-weight:700;margin-bottom:16px;word-break:break-all}
+</style>
+</head>
+<body>
+
+<header class="site"><div class="wrap">
+  <div class="nav">
+    <a class="brand" href="index.html"><svg class="logo" viewBox="0 0 40 40" aria-hidden="true"><path d="M38 20 29 35.6H11L2 20 11 4.4h18z" fill="#0e6f6b"/><circle cx="20" cy="20" r="8" fill="#0b1a24"/><path d="M38 20 29 35.6H11L2 20 11 4.4h18z" fill="none" stroke="#e0a423" stroke-width="2.4"/></svg><span>Vaydena<small>Lager</small></span></a>
+    <div class="spacer"></div>
+    <div class="nav-cta"><a class="btn gold sm" href="registrieren.html">Kostenlos testen</a></div>
+  </div>
+</div></header>
+
+<main class="authwrap single">
+  <!-- Anmelden -->
+  <form class="authcard" id="loginCard" novalidate>
+    <h1 class="mt0" style="font-size:1.6rem">Anmelden</h1>
+    <div id="loginMsg" class="msg" role="alert"></div>
+    <div class="field"><label for="email">E-Mail</label><input id="email" name="email" type="email" required autocomplete="email" inputmode="email"></div>
+    <div class="field"><label for="password">Passwort</label><div class="pwwrap"><input id="password" name="password" type="password" required autocomplete="current-password"><button type="button" class="pwToggle" aria-label="Passwort anzeigen">anzeigen</button></div></div>
+    <button class="btn primary block lg" type="submit" id="btnLogin">Anmelden</button>
+    <div class="links"><a href="#passwort" id="lnkForgot">Passwort vergessen?</a><a href="registrieren.html">Noch kein Zugang? Kostenlos testen</a></div>
+  </form>
+
+  <!-- Passwort zurücksetzen anfordern -->
+  <form class="authcard hide" id="resetCard" novalidate>
+    <h1 class="mt0" style="font-size:1.6rem">Passwort zurücksetzen</h1>
+    <p class="muted">Wir schicken Ihnen einen Link, mit dem Sie ein neues Passwort festlegen können.</p>
+    <div id="resetMsg" class="msg" role="alert"></div>
+    <div class="field"><label for="remail">E-Mail</label><input id="remail" name="email" type="email" required autocomplete="email" inputmode="email"></div>
+    <button class="btn primary block lg" type="submit" id="btnReset">Link anfordern</button>
+    <div class="links"><a href="#" id="lnkBack">Zurück zur Anmeldung</a></div>
+  </form>
+
+  <!-- Passwort festlegen (Einladung / Zurücksetzen) -->
+  <form class="authcard hide" id="setCard" novalidate>
+    <h1 class="mt0" style="font-size:1.6rem" id="setTitle">Passwort festlegen</h1>
+    <p class="muted" id="setIntro"></p>
+    <div id="setMsg" class="msg" role="alert"></div>
+    <div class="emailbox" id="setEmail">…</div>
+    <div class="field"><label for="npw">Neues Passwort</label><div class="pwwrap"><input id="npw" type="password" required minlength="8" autocomplete="new-password"><button type="button" class="pwToggle" aria-label="Passwort anzeigen">anzeigen</button></div><div class="hint">Mindestens 8 Zeichen.</div></div>
+    <div class="field"><label for="npw2">Passwort wiederholen</label><input id="npw2" type="password" required minlength="8" autocomplete="new-password"></div>
+    <button class="btn primary block lg" type="submit" id="btnSet">Passwort speichern und anmelden</button>
+    <div class="links"><a href="#passwort" id="lnkNew" class="hide">Neuen Link anfordern</a></div>
+  </form>
+</main>
+
+<footer class="site"><div class="wrap">
+  <div class="fbot"><span>© <span data-year>2026</span> Vaydena – Softwarelösungen</span><span><a href="impressum.html">Impressum</a> · <a href="datenschutz.html">Datenschutz</a> · <a href="agb.html">AGB</a></span></div>
+</div></footer>
+
+<script src="assets/supabase.js"></script>
+<script src="assets/auth.js"></script>
+<script src="assets/site.js"></script>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var cards = { login: $('loginCard'), reset: $('resetCard'), set: $('setCard') };
+  function showCard(name) { Object.keys(cards).forEach(function (k) { cards[k].classList.toggle('hide', k !== name); }); }
+  function msg(el, kind, text) { el.className = 'msg ' + kind; el.textContent = text; }
+  document.querySelectorAll('.pwToggle').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var inp = b.parentNode.querySelector('input'); var show = inp.type === 'password';
+      inp.type = show ? 'text' : 'password'; b.textContent = show ? 'verbergen' : 'anzeigen';
+    });
+  });
+
+  var next = LV.safeNext(LV.qs('next')) || 'app.html';
+  var token = LV.qs('reset') || LV.qs('invite');
+  var isInvite = !!LV.qs('invite');
+  if (LV.qs('email')) $('email').value = LV.qs('email');
+  if (LV.qs('registered')) msg($('loginMsg'), 'ok', 'Ihr Zugang ist angelegt. Bitte melden Sie sich an.');
+
+  function afterLogin(pw) {
+    return LV.apiCall('me').then(function (r) {
+      if (r.data && r.data.registered) { location.replace(next); return; }
+      $('btnLogin').disabled = false; $('btnLogin').textContent = 'Anmelden';
+      if (r.data && r.data.error === 'member_inactive') return msg($('loginMsg'), 'err', LV.ERRORS.member_inactive);
+      if (r.data && r.data.registered === false) {
+        $('loginMsg').className = 'msg info';
+        $('loginMsg').innerHTML = 'Für dieses Konto gibt es noch keinen Lager-Zugang. <a href="registrieren.html?email=' + encodeURIComponent($('email').value.trim()) + '">Jetzt Firma anlegen</a> – mit demselben Passwort.';
+        return;
+      }
+      msg($('loginMsg'), 'err', LV.errText(r));
+    });
+  }
+
+  // Anmelden
+  cards.login.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var email = $('email').value.trim().toLowerCase(), pw = $('password').value;
+    if (!email || !pw) return msg($('loginMsg'), 'err', 'Bitte E-Mail und Passwort eingeben.');
+    $('btnLogin').disabled = true; $('btnLogin').textContent = 'Anmeldung läuft …'; $('loginMsg').className = 'msg';
+    LV.signIn(email, pw).then(function (res) {
+      if (res.error || !(res.data && res.data.session)) {
+        $('btnLogin').disabled = false; $('btnLogin').textContent = 'Anmelden';
+        var m = (res.error && res.error.message) || '';
+        if (/invalid login|invalid_credentials|invalid grant/i.test(m)) return msg($('loginMsg'), 'err', 'E-Mail oder Passwort ist falsch.');
+        if (/fetch|network/i.test(m)) return msg($('loginMsg'), 'err', LV.ERRORS.offline);
+        return msg($('loginMsg'), 'err', 'Anmeldung fehlgeschlagen: ' + m);
+      }
+      return afterLogin(pw);
+    });
+  });
+
+  // Passwort vergessen
+  $('lnkForgot').addEventListener('click', function (e) { e.preventDefault(); $('remail').value = $('email').value; showCard('reset'); });
+  $('lnkBack').addEventListener('click', function (e) { e.preventDefault(); showCard('login'); });
+  $('lnkNew').addEventListener('click', function (e) { e.preventDefault(); showCard('reset'); });
+  cards.reset.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var email = $('remail').value.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return msg($('resetMsg'), 'err', LV.ERRORS.bad_email);
+    $('btnReset').disabled = true; $('resetMsg').className = 'msg';
+    LV.publicCall('request_reset', { email: email }).then(function (r) {
+      $('btnReset').disabled = false;
+      if (r.data && r.data.ok) msg($('resetMsg'), 'ok', 'Falls zu dieser E-Mail-Adresse ein Zugang existiert, ist jetzt ein Link unterwegs. Bitte auch den Spam-Ordner prüfen.');
+      else msg($('resetMsg'), 'err', LV.errText(r));
+    });
+  });
+
+  // Passwort festlegen (Einladung / Zurücksetzen)
+  if (token) {
+    showCard('set');
+    $('setTitle').textContent = isInvite ? 'Willkommen bei Vaydena Lager' : 'Neues Passwort festlegen';
+    $('setIntro').textContent = isInvite ? 'Bitte legen Sie ein Passwort für Ihren Zugang fest.' : 'Bitte legen Sie ein neues Passwort fest.';
+    $('setEmail').textContent = 'Link wird geprüft …';
+    LV.publicCall('check_token', { token: token }).then(function (r) {
+      if (r.data && r.data.ok) {
+        $('setEmail').textContent = r.data.email || '';
+        if (r.data.purpose === 'invite') { $('setTitle').textContent = 'Willkommen bei Vaydena Lager'; $('setIntro').textContent = 'Sie wurden eingeladen. Bitte legen Sie ein Passwort für Ihren Zugang fest.'; }
+      } else {
+        $('setEmail').textContent = '';
+        msg($('setMsg'), 'err', LV.errText(r));
+        $('btnSet').disabled = true; $('lnkNew').classList.remove('hide');
+      }
+    });
+    cards.set.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var p1 = $('npw').value, p2 = $('npw2').value;
+      if (p1.length < 8) return msg($('setMsg'), 'err', LV.ERRORS.bad_password);
+      if (p1 !== p2) return msg($('setMsg'), 'err', 'Die Passwörter stimmen nicht überein.');
+      $('btnSet').disabled = true; $('btnSet').textContent = 'Wird gespeichert …'; $('setMsg').className = 'msg';
+      LV.publicCall('set_password', { token: token, password: p1 }).then(function (r) {
+        if (!(r.data && r.data.ok)) {
+          $('btnSet').disabled = false; $('btnSet').textContent = 'Passwort speichern und anmelden';
+          if (r.data && r.data.error === 'invalid_token') $('lnkNew').classList.remove('hide');
+          return msg($('setMsg'), 'err', LV.errText(r));
+        }
+        return LV.signIn(r.data.email, p1).then(function (res) {
+          if (res && res.data && res.data.session) { location.replace('app.html'); return; }
+          location.replace('anmelden.html?email=' + encodeURIComponent(r.data.email) + '&registered=1');
+        });
+      });
+    });
+  } else if (location.hash === '#passwort') {
+    showCard('reset');
+  } else {
+    // Bereits angemeldet? Direkt weiter.
+    LV.currentSession().then(function (s) {
+      if (!s) return;
+      LV.apiCall('me').then(function (r) { if (r.data && r.data.registered) location.replace(next); });
+    });
+  }
+})();
+</script>
+</body>
+</html>

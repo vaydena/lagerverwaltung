@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rechnung & Zahlung – Vaydena Lager</title>
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#0b1a24">
+<link rel="icon" href="assets/icons/favicon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+<link rel="stylesheet" href="assets/app.css">
+<style>
+  .pay{max-width:980px;margin:0 auto;padding:40px 22px 60px}
+  .pay-head{display:flex;flex-wrap:wrap;gap:12px 18px;align-items:center;justify-content:space-between;margin-bottom:8px}
+  .pay-head h1{font-size:1.7rem;margin:0}
+  .pill.open{background:var(--gold-l);color:var(--gold-d)}
+  .pill.paid{background:var(--ok-l);color:#136b48}
+  .pill.void{background:#e8ecee;color:#5c6f77}
+  .sumline{color:var(--muted);margin-bottom:22px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:26px;box-shadow:var(--shadow-s)}
+  .card h2{font-size:1.15rem;margin-bottom:14px}
+  .kv{display:grid;grid-template-columns:auto 1fr auto;gap:10px 14px;align-items:center;font-size:.97rem}
+  .kv .k{color:var(--muted);font-size:.78rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em}
+  .kv .v{font-weight:700;word-break:break-all;font-variant-numeric:tabular-nums}
+  .kv .v.big{font-size:1.45rem;color:var(--primary-d)}
+  .copy{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:5px 10px;font:inherit;font-size:.8rem;font-weight:700;color:var(--primary-d);cursor:pointer;white-space:nowrap}
+  .copy:hover{background:var(--primary-l);border-color:var(--primary)}
+  .copy.done{background:var(--ok-l);color:#136b48;border-color:#bfe6d2}
+  .giro{display:flex;flex-direction:column;align-items:center;text-align:center}
+  .giro svg{width:min(250px,100%);height:auto;background:#fff;padding:10px;border:1px solid var(--line);border-radius:12px}
+  .giro .hint{font-size:.88rem;color:var(--muted);margin-top:12px;max-width:30em}
+  .actions{display:flex;flex-wrap:wrap;gap:12px;margin:26px 0 0}
+  .state{max-width:640px;margin:60px auto;text-align:center}
+  /* Rechnungsdokument */
+  .idoc{background:#fff;color:#111;max-width:800px;margin:0 auto 60px;padding:40px 44px;border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow-s);font-size:14px;line-height:1.5}
+  .idoc .dhead{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:30px}
+  .idoc .issuer{font-size:12.5px;color:#333;text-align:right}
+  .idoc .issuer b{display:block;font-size:14px;color:#0e6f6b}
+  .idoc .sender{font-size:10.5px;color:#666;border-bottom:1px solid #ccc;display:inline-block;padding-bottom:2px;margin-bottom:8px}
+  .idoc .rcpt{white-space:pre-line;font-size:14px}
+  .idoc .titlerow{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:8px}
+  .idoc h2{font-size:22px;margin:0;color:#111}
+  .idoc .meta{display:grid;grid-template-columns:auto auto;gap:2px 18px;font-size:13px}
+  .idoc table{width:100%;border-collapse:collapse;margin:14px 0 8px}
+  .idoc th,.idoc td{padding:9px 8px;text-align:left;border-bottom:1px solid #ddd;vertical-align:top}
+  .idoc th{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:#555;border-bottom:2px solid #333}
+  .idoc td.r,.idoc th.r{text-align:right;white-space:nowrap}
+  .idoc tr.total td{font-weight:800;font-size:15px;border-bottom:0;border-top:2px solid #333}
+  .idoc .taxnote{font-size:12px;color:#555;margin:4px 0 20px}
+  .idoc .paybox{border:1px solid #ccc;border-radius:8px;padding:12px 14px;font-size:13px;margin-bottom:20px;background:#fafafa}
+  .idoc .paybox b{display:inline-block;min-width:150px}
+  .idoc .stamp{display:inline-block;border:2px solid #1f9d6b;color:#1f9d6b;font-weight:800;padding:4px 10px;border-radius:6px;transform:rotate(-3deg);margin:4px 0 16px}
+  .idoc .stamp.void{border-color:#888;color:#888}
+  .idoc .dfoot{border-top:1px solid #ddd;padding-top:12px;font-size:11px;color:#666;display:flex;gap:16px;flex-wrap:wrap;justify-content:space-between}
+  .doc-label{max-width:800px;margin:34px auto 10px;padding:0 22px;color:var(--muted);font-size:.85rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em}
+  @media (max-width:620px){.idoc{padding:26px 20px;margin:0 22px 50px}.kv{grid-template-columns:1fr;gap:4px}.kv .k{margin-top:8px}.kv .copy{justify-self:start}}
+  @media print{
+    body>*{display:none!important}
+    #invoiceDoc{display:block!important;box-shadow:none;border:0;margin:0;max-width:none;padding:0;border-radius:0}
+    @page{size:A4;margin:16mm}
+  }
+</style>
+</head>
+<body>
+
+<header class="site"><div class="wrap">
+  <div class="nav">
+    <a class="brand" href="index.html"><svg class="logo" viewBox="0 0 40 40" aria-hidden="true"><path d="M38 20 29 35.6H11L2 20 11 4.4h18z" fill="#0e6f6b"/><circle cx="20" cy="20" r="8" fill="#0b1a24"/><path d="M38 20 29 35.6H11L2 20 11 4.4h18z" fill="none" stroke="#e0a423" stroke-width="2.4"/></svg><span>Vaydena<small>Lager</small></span></a>
+    <div class="spacer"></div>
+    <div class="nav-cta"><a class="btn ghost sm" href="app.html">Zur App</a></div>
+  </div>
+</div></header>
+
+<main class="pay">
+  <div id="loading" class="state"><p class="muted">Rechnung wird geladen …</p></div>
+
+  <div id="gate" class="state hide">
+    <h1 style="font-size:1.6rem" id="gateTitle">Rechnung nicht gefunden</h1>
+    <p class="muted" id="gateText">Der Link ist ungültig oder die Rechnung wurde entfernt. Die aktuellen Rechnungen finden Sie in der App unter „Abo“.</p>
+    <a class="btn primary" href="app.html">Zur App</a>
+  </div>
+
+  <div id="main" class="hide">
+    <p class="eyebrow">Vaydena Lager · Rechnung</p>
+    <div class="pay-head"><h1>Rechnung <span id="invNo"></span></h1><span class="pill" id="invStatus"></span></div>
+    <p class="sumline" id="sumline"></p>
+
+    <div id="paidBox" class="msg ok hide"></div>
+    <div id="voidBox" class="msg info hide">Diese Rechnung wurde storniert. Es ist keine Zahlung erforderlich.</div>
+
+    <div id="openBox" class="grid g2 hide">
+      <div class="card">
+        <h2>Per Überweisung bezahlen</h2>
+        <div class="kv">
+          <span class="k">Empfänger</span><span class="v" id="bHolder"></span><button class="copy" type="button" data-copy="holder">Kopieren</button>
+          <span class="k">IBAN</span><span class="v" id="bIban"></span><button class="copy" type="button" data-copy="iban">Kopieren</button>
+          <span class="k">BIC</span><span class="v" id="bBic"></span><button class="copy" type="button" data-copy="bic">Kopieren</button>
+          <span class="k">Betrag</span><span class="v big" id="bAmount"></span><button class="copy" type="button" data-copy="amount">Kopieren</button>
+          <span class="k">Verwendungszweck</span><span class="v" id="bRef"></span><button class="copy" type="button" data-copy="ref">Kopieren</button>
+        </div>
+        <p class="formnote">Bitte den Verwendungszweck genau so übernehmen – daran erkennen wir Ihre Zahlung. Fällig bis <b id="bDue"></b>. Nach Zahlungseingang (in der Regel 1–2 Werktage) schalten wir den Tarif frei und schicken eine Bestätigung per E-Mail.</p>
+      </div>
+      <div class="card giro">
+        <h2>Oder mit GiroCode</h2>
+        <div id="giroBox"></div>
+        <p class="hint">Banking-App öffnen → „Überweisung per QR-Code / GiroCode“ wählen → Code scannen. Empfänger, IBAN, Betrag und Verwendungszweck sind dann bereits ausgefüllt.</p>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn primary" type="button" id="btnPrint">Rechnung drucken / als PDF speichern</button>
+      <a class="btn ghost" href="app.html">Zur App</a>
+    </div>
+  </div>
+</main>
+
+<div class="doc-label hide" id="docLabel">Rechnungsdokument</div>
+<section class="idoc hide" id="invoiceDoc" aria-label="Rechnungsdokument"></section>
+
+<footer class="site"><div class="wrap">
+  <div class="fbot"><span>© <span data-year>2026</span> Vaydena – Softwarelösungen</span><span><a href="impressum.html">Impressum</a> · <a href="datenschutz.html">Datenschutz</a> · <a href="agb.html">AGB</a></span></div>
+</div></footer>
+
+<script src="assets/auth.js"></script>
+<script src="assets/site.js"></script>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var e = LV.esc;
+  var token = LV.qs('r') || '';
+  var copyVals = {};
+
+  function show(id) { ['loading', 'gate', 'main'].forEach(function (k) { $(k).classList.toggle('hide', k !== id); }); }
+
+  if (!/^[0-9a-f]{36}$/.test(token)) { show('gate'); }
+  else {
+    LV.publicCall('invoice', { access_token: token }).then(function (r) {
+      if (!(r.data && r.data.ok && r.data.invoice)) {
+        if (r.status === 0) { $('gateTitle').textContent = 'Keine Verbindung'; $('gateText').textContent = LV.errText(r); }
+        show('gate'); return;
+      }
+      render(r.data.invoice);
+    });
+  }
+
+  function render(inv) {
+    var stText = { open: 'Offen – Zahlung ausstehend', paid: 'Bezahlt', void: 'Storniert' }[inv.status] || inv.status;
+    $('invNo').textContent = inv.number;
+    var pill = $('invStatus'); pill.textContent = stText; pill.className = 'pill ' + inv.status;
+    $('sumline').textContent = inv.description + ' · ' + LV.euro(inv.amount_cents) + ' · ausgestellt am ' + inv.issued_dmy + ' · fällig bis ' + inv.due_dmy;
+    if (inv.status === 'paid') {
+      $('paidBox').textContent = 'Zahlung eingegangen am ' + inv.paid_dmy + '. Vielen Dank! Der Tarif ist freigeschaltet.';
+      $('paidBox').classList.remove('hide');
+    } else if (inv.status === 'void') {
+      $('voidBox').classList.remove('hide');
+    } else {
+      var b = inv.bank || {};
+      $('bHolder').textContent = b.holder || ''; $('bIban').textContent = b.iban || ''; $('bBic').textContent = b.bic || '';
+      $('bAmount').textContent = inv.amount_eur + ' €'; $('bRef').textContent = inv.reference; $('bDue').textContent = inv.due_dmy;
+      copyVals = { holder: b.holder || '', iban: b.iban_raw || b.iban || '', bic: b.bic || '', amount: inv.amount_eur, ref: inv.reference };
+      if (inv.giro && inv.giro.path) {
+        $('giroBox').innerHTML = '<svg viewBox="0 0 ' + Number(inv.giro.size) + ' ' + Number(inv.giro.size) + '" shape-rendering="crispEdges" role="img" aria-label="GiroCode für diese Überweisung"><rect width="100%" height="100%" fill="#fff"/><path d="' + e(inv.giro.path) + '" fill="#0f172a"/></svg>';
+      } else {
+        $('giroBox').innerHTML = '<p class="muted">GiroCode nicht verfügbar – bitte die Bankverbindung links verwenden.</p>';
+      }
+      $('openBox').classList.remove('hide');
+    }
+    renderDoc(inv);
+    document.title = 'Rechnung ' + inv.number + ' – Vaydena Lager';
+    show('main');
+  }
+
+  function renderDoc(inv) {
+    var b = inv.billing || {}, is = inv.issuer || {}, bank = inv.bank || {};
+    var rcpt = [b.recipient || inv.tenant_name, b.street, [b.zip, b.city].filter(Boolean).join(' ')].filter(Boolean).join('\n');
+    var html = '';
+    html += '<div class="dhead"><div><div class="sender">' + e(is.name) + ' · ' + e(is.street) + ' · ' + e(is.zip) + ' ' + e(is.city) + '</div>' +
+      '<div class="rcpt">' + e(rcpt) + '</div>' + (b.email ? '<div class="rcpt" style="font-size:12px;color:#555;margin-top:4px">' + e(b.email) + '</div>' : '') + '</div>' +
+      '<div class="issuer"><b>' + e(is.name) + '</b>Inhaber ' + e(is.owner) + '<br>' + e(is.street) + '<br>' + e(is.zip) + ' ' + e(is.city) + '<br>' + e(is.email) + '<br>Tel. ' + e(is.tel) + '</div></div>';
+    html += '<div class="titlerow"><h2>Rechnung ' + e(inv.number) + '</h2><div class="meta"><span>Rechnungsdatum</span><b>' + e(inv.issued_dmy) + '</b><span>Fällig bis</span><b>' + e(inv.due_dmy) + '</b><span>Kunde</span><b>' + e(inv.tenant_name) + '</b></div></div>';
+    html += '<table><thead><tr><th>Leistung</th><th>Laufzeit</th><th class="r">Betrag</th></tr></thead><tbody>' +
+      '<tr><td>' + e(inv.description) + '<br><span style="color:#666;font-size:12px">Software-Nutzung (SaaS) gemäß AGB · Freischaltung nach Zahlungseingang</span></td><td>' + e(inv.period_label) + '</td><td class="r">' + e(LV.euro(inv.amount_cents)) + '</td></tr>' +
+      '<tr class="total"><td colspan="2">Rechnungsbetrag</td><td class="r">' + e(LV.euro(inv.amount_cents)) + '</td></tr></tbody></table>';
+    html += '<p class="taxnote">' + e(inv.tax_note) + '</p>';
+    if (inv.status === 'paid') html += '<div class="stamp">BEZAHLT' + (inv.paid_dmy ? ' am ' + e(inv.paid_dmy) : '') + '</div>';
+    else if (inv.status === 'void') html += '<div class="stamp void">STORNIERT</div>';
+    else html += '<div class="paybox"><b>Zahlbar bis</b>' + e(inv.due_dmy) + '<br><b>Empfänger</b>' + e(bank.holder) + '<br><b>IBAN</b>' + e(bank.iban) + '<br><b>BIC</b>' + e(bank.bic) + '<br><b>Verwendungszweck</b>' + e(inv.reference) + '</div>';
+    html += '<div class="dfoot"><span>' + e(is.name) + ' · Inhaber ' + e(is.owner) + ' · ' + e(is.street) + ' · ' + e(is.zip) + ' ' + e(is.city) + '</span><span>' + e(is.email) + ' · Tel. ' + e(is.tel) + '</span></div>';
+    $('invoiceDoc').innerHTML = html;
+    $('invoiceDoc').classList.remove('hide');
+    $('docLabel').classList.remove('hide');
+  }
+
+  function fallbackCopy(t) {
+    try {
+      var ta = document.createElement('textarea'); ta.value = t; ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select();
+      var ok = document.execCommand('copy'); document.body.removeChild(ta); return ok;
+    } catch (err) { return false; }
+  }
+  function copyText(t) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(t).then(function () { return true; }, function () { return fallbackCopy(t); });
+    }
+    return Promise.resolve(fallbackCopy(t));
+  }
+  document.querySelectorAll('.copy').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      copyText(copyVals[btn.getAttribute('data-copy')] || '').then(function (ok) {
+        btn.textContent = ok ? 'Kopiert' : 'Fehler'; btn.classList.toggle('done', ok);
+        setTimeout(function () { btn.textContent = 'Kopieren'; btn.classList.remove('done'); }, 1600);
+      });
+    });
+  });
+  $('btnPrint').addEventListener('click', function () { window.print(); });
+})();
+</script>
+</body>
+</html>

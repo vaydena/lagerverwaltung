@@ -1,0 +1,6 @@
+deploy-local.log
+node_modules/
+test/out/
+.DS_Store
+test/last-run.log
+test/ui-smoke-run.log

@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Vaydena Lager – Lagerverwaltung mit eigenen Barcodes, Smartphone-Scanner und Offline-Modus</title>
+<meta name="description" content="Lagerverwaltung als Abo für kleine und mittlere Betriebe: Artikel anlegen, eigene Barcode-Etiketten drucken, mit dem Smartphone scannen und buchen – auch ohne Internet. Zahlung per Überweisung und GiroCode. 14 Tage kostenlos testen.">
+<link rel="canonical" href="https://lagerverwaltung.vaydena.de/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Vaydena Lager – Lagerverwaltung mit Smartphone-Scanner und Offline-Modus">
+<meta property="og:description" content="Eigene Barcodes drucken, per Smartphone scannen, offline buchen. Ab 19 € im Monat, Zahlung per Überweisung oder GiroCode.">
+<meta property="og:url" content="https://lagerverwaltung.vaydena.de/">
+<meta property="og:image" content="https://lagerverwaltung.vaydena.de/assets/icons/icon-512.png">
+<meta name="theme-color" content="#0b1a24">
+<link rel="icon" href="assets/icons/favicon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+<link rel="stylesheet" href="assets/app.css">
+<style>
+  /* Hero-Visual: Smartphone mit Scanner */
+  .hero-visual{position:relative;display:flex;justify-content:center;align-items:center;min-height:560px}
+  .phone{width:296px;background:#0b1a24;border-radius:40px;padding:12px;position:relative;
+    box-shadow:0 34px 70px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.12) inset}
+  .phone::before{content:"";position:absolute;top:12px;left:50%;transform:translateX(-50%);width:104px;height:24px;background:#0b1a24;border-radius:0 0 16px 16px;z-index:2}
+  .phone-screen{background:#f4f7f8;border-radius:30px;overflow:hidden;min-height:560px;display:flex;flex-direction:column;color:var(--ink)}
+  .ph-top{display:flex;justify-content:space-between;align-items:center;padding:36px 16px 10px;font-weight:800;font-size:13px}
+  .ph-top .st{font-weight:700;font-size:11px;padding:3px 9px;border-radius:999px;background:var(--gold-l);color:var(--gold-d);display:flex;gap:6px;align-items:center}
+  .ph-top .st i{width:7px;height:7px;border-radius:50%;background:var(--gold);display:inline-block}
+  .ph-cam{margin:4px 14px;background:linear-gradient(160deg,#1d3742,#0e222b);border-radius:16px;height:186px;position:relative;overflow:hidden;display:grid;place-items:center}
+  .ph-frame{position:absolute;inset:24px 34px;border:2px solid rgba(255,255,255,.5);border-radius:12px}
+  .ph-frame::before,.ph-frame::after{content:"";position:absolute;width:22px;height:22px;border:3px solid var(--gold)}
+  .ph-frame::before{top:-3px;left:-3px;border-right:0;border-bottom:0;border-radius:6px 0 0 0}
+  .ph-frame::after{bottom:-3px;right:-3px;border-left:0;border-top:0;border-radius:0 0 6px 0}
+  .ph-code{width:152px;background:#fff;border-radius:6px;padding:8px 10px 6px;display:flex;flex-direction:column;align-items:center;gap:4px;position:relative}
+  .ph-bars{width:100%;height:38px;background:repeating-linear-gradient(90deg,#0b1a24 0 2px,#fff 2px 3px,#0b1a24 3px 4px,#fff 4px 7px,#0b1a24 7px 10px,#fff 10px 11px,#0b1a24 11px 12px,#fff 12px 15px,#0b1a24 15px 17px,#fff 17px 18px)}
+  .ph-code small{font-size:9px;letter-spacing:.14em;color:#0b1a24;font-weight:700;font-family:ui-monospace,Menlo,Consolas,monospace}
+  .ph-laser{position:absolute;left:34px;right:34px;height:2px;background:var(--gold);box-shadow:0 0 12px var(--gold);animation:laser 2.4s ease-in-out infinite}
+  @keyframes laser{0%,100%{top:40px}50%{top:146px}}
+  .ph-hit{margin:12px 14px 0;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 12px;box-shadow:var(--shadow-s);font-size:13px}
+  .ph-hit b{display:block;font-size:11.5px;color:var(--primary-d);letter-spacing:.08em;font-family:ui-monospace,Menlo,Consolas,monospace}
+  .ph-hit span{display:block;font-weight:700;font-size:13.5px;margin:2px 0}
+  .ph-hit small{color:var(--muted);font-size:11.5px}
+  .ph-hit small em{color:var(--ok);font-style:normal;font-weight:800}
+  .ph-qty{display:flex;align-items:center;gap:8px;margin:10px 14px 0;font-size:12px;font-weight:700;color:var(--ink-2)}
+  .ph-qty span{flex:1;background:#fff;border:1px solid var(--line);border-radius:10px;padding:9px 12px;text-align:center;font-size:15px;font-family:ui-monospace,Menlo,Consolas,monospace}
+  .ph-qty b{width:36px;height:36px;border-radius:10px;background:#fff;border:1px solid var(--line);display:grid;place-items:center;font-size:18px}
+  .ph-actions{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:10px 14px 0}
+  .ph-actions span{display:block;text-align:center;padding:11px 4px;border-radius:10px;font-weight:800;font-size:12px;background:#fff;border:1px solid var(--line);color:var(--ink-2)}
+  .ph-actions span.in{background:var(--primary);color:#fff;border-color:var(--primary)}
+  .ph-queue{margin:auto 14px 16px;display:flex;align-items:center;gap:8px;font-size:11.5px;color:#7a4f06;background:var(--gold-l);border-radius:10px;padding:9px 12px;font-weight:700}
+  .ph-queue i{width:8px;height:8px;border-radius:50%;background:var(--gold);display:inline-block;animation:pulse 1.4s infinite}
+  @keyframes pulse{50%{opacity:.3}}
+  .hero-visual .tag{position:absolute;background:#fff;color:var(--ink);border-radius:12px;padding:10px 14px;font-weight:700;font-size:.86rem;box-shadow:var(--shadow-m);display:flex;gap:8px;align-items:center;white-space:nowrap}
+  .hero-visual .tag svg{width:18px;height:18px;color:var(--primary);flex:0 0 auto}
+  .tag.t1{left:0;top:70px}.tag.t2{right:0;bottom:90px}
+  @media (max-width:1000px){.hero-visual .tag{display:none}}
+  @media (max-width:900px){.hero-visual{min-height:0}.phone{width:270px}.phone-screen{min-height:520px}}
+
+  /* Offline-Erklärung */
+  .ofx{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:var(--radius);padding:26px}
+  .ofx .k{display:inline-grid;place-items:center;width:38px;height:38px;border-radius:11px;background:var(--gold);color:var(--navy);font-weight:800;margin-bottom:14px}
+  .ofx h3{color:#fff}
+  .ofx p{color:var(--navy-muted);margin:0;font-size:.97rem}
+  .technote{margin:28px auto 0;text-align:center;color:var(--navy-muted);font-size:.92rem;max-width:52em}
+
+  /* Preise */
+  .ptoggle-wrap{text-align:center;margin-bottom:34px}
+  .ptoggle{display:inline-flex;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:4px;gap:4px}
+  .ptoggle button{border:0;background:none;padding:9px 18px;border-radius:999px;font:inherit;font-weight:700;color:var(--ink-2);cursor:pointer;display:flex;align-items:center;gap:8px}
+  .ptoggle button.on{background:var(--primary);color:#fff}
+  .ptoggle .save{font-size:.72rem;background:var(--gold-l);color:var(--gold-d);padding:2px 8px;border-radius:999px}
+  .ptoggle button.on .save{background:var(--gold);color:var(--navy)}
+  .pricenote{max-width:46em;margin:28px auto 0;text-align:center;color:var(--muted);font-size:.93rem}
+
+  /* Kontakt */
+  .contact{display:grid;grid-template-columns:.9fr 1.1fr;gap:44px;align-items:start}
+  .contact .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:28px;box-shadow:var(--shadow-s)}
+  .contact .kv{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--line)}
+  .contact .kv:last-child{border-bottom:0}
+  .contact .kv svg{width:20px;height:20px;color:var(--primary);flex:0 0 auto;margin-top:3px}
+  .contact .kv b{display:block;font-size:.85rem;color:var(--muted);font-weight:600}
+  .hp{position:absolute;left:-9999px;top:-9999px;height:0;width:0;opacity:0}
+  @media (max-width:900px){.contact{grid-template-columns:1fr}}
+</style>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Vaydena Lager","applicationCategory":"BusinessApplication","operatingSystem":"Web, Android, iOS (Progressive Web App)","url":"https://lagerverwaltung.vaydena.de/","description":"Lagerverwaltung mit eigenen Barcodes, Smartphone-Scanner und Offline-Modus. Abrechnung per Überweisung und GiroCode.","offers":[{"@type":"Offer","name":"Starter","price":"19","priceCurrency":"EUR"},{"@type":"Offer","name":"Team","price":"49","priceCurrency":"EUR"},{"@type":"Offer","name":"Business","price":"99","priceCurrency":"EUR"}],"provider":{"@type":"Organization","name":"Vaydena – Softwarelösungen","url":"https://vaydena.de"}}
+</script>
+</head>
+<body>
+
+<header class="site"><div class="wrap">
+  <div class="nav">
+    <a class="brand" href="index.html" aria-label="Vaydena Lager – Startseite">
+      <svg class="logo" viewBox="0 0 40 40" aria-hidden="true"><path d="M38 20 29 35.6H11L2 20 11 4.4h18z" fill="#0e6f6b"/><circle cx="20" cy="20" r="8" fill="#0b1a24"/><path d="M38 20 29 35.6H11L2 20 11 4.4h18z" fill="none" stroke="#e0a423" stroke-width="2.4"/></svg>
+      <span>Vaydena<small>Lager</small></span>
+    </a>
+    <div class="spacer"></div>
+    <nav class="nav-links" aria-label="Hauptnavigation">
+      <a href="#funktionen">Funktionen</a>
+      <a href="#offline">Offline</a>
+      <a href="#ablauf">So geht's</a>
+      <a href="#preise">Preise</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+    <div class="nav-cta">
+      <a class="btn ghost sm" href="anmelden.html">Anmelden</a>
+      <a class="btn gold sm" href="registrieren.html">Kostenlos testen</a>
+    </div>
+    <button class="nav-toggle" aria-label="Menü öffnen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  </div>
+  <div class="mobile-menu">
+    <a href="#funktionen">Funktionen</a>
+    <a href="#offline">Offline-Modus</a>
+    <a href="#ablauf">So funktioniert's</a>
+    <a href="#preise">Preise</a>
+    <a href="#faq">FAQ</a>
+    <a href="anmelden.html">Anmelden</a>
+    <a href="registrieren.html">Kostenlos testen</a>
+  </div>
+</div></header>
+
+<section class="hero">
+  <div class="wrap">
+    <div>
+      <p class="eyebrow gold">Lagerverwaltung als Abo · Handwerk, Werkstatt, Handel</p>
+      <h1>Ihr Lager im Griff – mit <span class="hl">eigenen Barcodes</span> und dem Smartphone.</h1>
+      <p class="lead">Artikel anlegen, Etiketten drucken, scannen, buchen. Vaydena Lager läuft im Browser und auf jedem Smartphone – und bucht auch dann weiter, wenn im Keller, in der Halle oder auf der Baustelle gerade kein Netz ist.</p>
+      <div class="cta-row">
+        <a class="btn gold lg" href="registrieren.html">14 Tage kostenlos testen</a>
+        <a class="btn ghost on-navy lg" href="#ablauf">So funktioniert's</a>
+      </div>
+      <div class="trustline">
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Keine Zahlungsdaten zum Testen</span>
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Überweisung &amp; GiroCode</span>
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Server in Frankfurt</span>
+      </div>
+    </div>
+    <div class="hero-visual" aria-hidden="true">
+      <div class="tag t1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Etikett selbst gedruckt</div>
+      <div class="phone"><div class="phone-screen">
+        <div class="ph-top"><span>Vaydena Lager</span><span class="st"><i></i>offline</span></div>
+        <div class="ph-cam">
+          <div class="ph-frame"></div>
+          <div class="ph-code"><div class="ph-bars"></div><small>ART-000124</small></div>
+          <div class="ph-laser"></div>
+        </div>
+        <div class="ph-hit"><b>ART-000124</b><span>Kabelbinder 200 mm, 100 St.</span><small>Regal A3 · Bestand 12 <em>→ 22</em></small></div>
+        <div class="ph-qty"><b>–</b><span>10</span><b>+</b></div>
+        <div class="ph-actions"><span class="in">Eingang</span><span>Ausgang</span><span>Umlagern</span></div>
+        <div class="ph-queue"><i></i>3 Buchungen warten auf Abgleich</div>
+      </div></div>
+      <div class="tag t2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M8 11l4 4 4-4M4 19h16"/></svg>Wird später automatisch übertragen</div>
+    </div>
+  </div>
+</section>
+
+<section class="tight">
+  <div class="wrap">
+    <div class="sec-head"><p class="eyebrow">Für wen</p><h2>Gemacht für Betriebe, die kein ERP wollen</h2><p>Einfach genug für den Alltag, ehrlich abgerechnet – und gebaut für Leute, die mit dem Handy in der Hand arbeiten.</p></div>
+    <div class="audience">
+      <div class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>Handwerk &amp; Bau</div>
+      <div class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>Werkstatt &amp; Service</div>
+      <div class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>Handel &amp; Onlineshop</div>
+      <div class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>Hausmeister &amp; Facility</div>
+      <div class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>Praxis &amp; Labor</div>
+      <div class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>Verein &amp; Verwaltung</div>
+    </div>
+  </div>
+</section>
+
+<section id="funktionen" class="alt">
+  <div class="wrap">
+    <div class="sec-head"><p class="eyebrow">Funktionen</p><h2>Alles, was ein kleines Lager braucht. Nichts, was es nicht braucht.</h2><p>Sie legen die Codes an, wir kümmern uns um Bestand, Buchungen und Abgleich.</p></div>
+    <div class="grid g3">
+      <div class="feature">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 6v12M8 6v12M11 6v12M15 6v12M18 6v12M21 6v12"/></svg></div>
+        <h3>Eigene Barcodes</h3>
+        <p>Jeder Artikel bekommt automatisch eine Nummer wie <b>ART-000124</b> – mit frei wählbarem Präfix – oder Sie vergeben eigene Codes. Daraus werden QR- und Code-128-Etiketten. Vorhandene EAN-Codes vom Hersteller ordnen Sie einfach per Scan zu.</p>
+      </div>
+      <div class="feature">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M6 12h12"/></svg></div>
+        <h3>Smartphone-Scanner</h3>
+        <p>Die Handykamera liest QR, Code 128, EAN-13/8, Code 39 und mehr. Kein Zusatzgerät nötig – vorhandene USB- oder Bluetooth-Handscanner funktionieren trotzdem.</p>
+      </div>
+      <div class="feature gold">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19a4.5 4.5 0 0 0 .4-9A7 7 0 0 0 5.1 8.5 4 4 0 0 0 6 16"/><path d="m4 4 16 16"/></svg></div>
+        <h3>Offline buchen</h3>
+        <p>Eingang, Ausgang, Umlagerung und Inventur laufen ohne Netz weiter. Sobald wieder Verbindung besteht, überträgt die App alle Buchungen automatisch – in der richtigen Reihenfolge.</p>
+      </div>
+      <div class="feature">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V8l9-5 9 5v13"/><path d="M9 21v-6h6v6M3 21h18"/></svg></div>
+        <h3>Lagerorte &amp; Umlagern</h3>
+        <p>Regal, Fahrzeug, Baustelle, Außenlager – Bestände pro Lagerort, Umbuchen mit zwei Scans. Jeder Lagerort bekommt ein eigenes Etikett.</p>
+      </div>
+      <div class="feature">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg></div>
+        <h3>Mindestbestand &amp; Export</h3>
+        <p>Warnliste für alles, was nachbestellt werden muss. Bewegungsjournal, Bestandsliste und Inventur als CSV für Excel oder den Steuerberater – jederzeit, ohne Nachfrage.</p>
+      </div>
+      <div class="feature">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+        <h3>Team &amp; Rollen</h3>
+        <p>Mitarbeiter per E-Mail einladen. Administratoren verwalten Artikel, Team und Abo, Mitarbeiter scannen und buchen. Jede Buchung mit Name, Zeit und Gerät.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="offline" class="navy-sec">
+  <div class="wrap">
+    <div class="sec-head"><p class="eyebrow gold">Offline-Modus</p><h2>Funktioniert auch ohne Internet. Wirklich.</h2><p>Kein Netz im Keller, in der Halle oder auf der Baustelle? Die App merkt sich alles und gleicht später ab.</p></div>
+    <div class="grid g3">
+      <div class="ofx"><div class="k">1</div><h3>Daten aufs Gerät</h3><p>Beim ersten Öffnen lädt die App Artikel, Lagerorte und Bestände auf das Smartphone. Über „Zum Startbildschirm hinzufügen“ bleibt sie wie eine normale App installiert – ohne App Store.</p></div>
+      <div class="ofx"><div class="k">2</div><h3>Buchen ohne Netz</h3><p>Scannen und buchen wie gewohnt. Jede Buchung wird lokal gespeichert und in einer Warteschlange gehalten. Sie sehen jederzeit, wie viele Buchungen noch ausstehen.</p></div>
+      <div class="ofx"><div class="k">3</div><h3>Automatischer Abgleich</h3><p>Sobald das Gerät wieder online ist, überträgt die App alle Buchungen. Nichts wird überschrieben: Buchungen werden zeitlich sortiert zusammengeführt – auch wenn mehrere Kollegen offline gearbeitet haben.</p></div>
+    </div>
+    <p class="technote">Technik: Progressive Web App mit lokaler Datenbank (IndexedDB) und eindeutigen Buchungs-IDs. Läuft auf Android, iPhone, Tablet und PC – im Browser, ohne Installation aus einem App Store.</p>
+  </div>
+</section>
+
+<section id="ablauf">
+  <div class="wrap">
+    <div class="sec-head"><p class="eyebrow">So funktioniert's</p><h2>In einer Stunde vom Regal-Chaos zur sauberen Bestandsliste</h2></div>
+    <div class="steps">
+      <div class="step"><div class="n">1</div><h3>Registrieren</h3><p>Firma, Name, E-Mail – fertig. Keine Zahlungsdaten, keine Kündigungsfrist. Der Test endet nach 14 Tagen von selbst.</p></div>
+      <div class="step"><div class="n">2</div><h3>Artikel &amp; Lagerorte anlegen</h3><p>Von Hand, per CSV-Import aus Excel oder durch Scannen vorhandener EAN-Codes. Lagerorte wie „Regal A3“ oder „Bus 2“ in Sekunden.</p></div>
+      <div class="step"><div class="n">3</div><h3>Etiketten drucken</h3><p>Auf normalen Druckern mit Avery-Bögen oder auf Etikettendruckern. Codes sind Ihre eigenen – lesbar mit jedem Scanner.</p></div>
+      <div class="step"><div class="n">4</div><h3>Scannen &amp; buchen</h3><p>Handy oder Handscanner, online oder offline. Eingang, Ausgang, Umlagern, Inventur. Bestand und Journal sind immer aktuell.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="preise" class="alt">
+  <div class="wrap">
+    <div class="sec-head"><p class="eyebrow">Preise</p><h2>Klare Tarife, Zahlung per Überweisung</h2><p>Keine Kreditkarte, kein Lastschriftmandat, keine automatische Verlängerung. Sie bekommen eine Rechnung mit GiroCode – scannen, freigeben, fertig.</p></div>
+    <div class="ptoggle-wrap">
+      <div class="ptoggle" role="group" aria-label="Abrechnungszeitraum">
+        <button type="button" class="on" data-period="monat">Monatlich</button>
+        <button type="button" data-period="jahr">Jährlich <span class="save">2 Monate gratis</span></button>
+      </div>
+    </div>
+    <div class="tiers">
+      <div class="tier">
+        <div class="tname">Test</div>
+        <div class="price">0 €<small> / 14 Tage</small></div>
+        <div class="per">alle Funktionen, ohne Zahlungsdaten</div>
+        <p class="desc">Zum Ausprobieren mit echten Artikeln und dem eigenen Team.</p>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Bis 10 Nutzer</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Bis 10.000 Artikel</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Scanner, Etiketten, Offline-Modus</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Endet automatisch, Daten bleiben</li>
+        </ul>
+        <a class="btn ghost block" href="registrieren.html">Kostenlos testen</a>
+      </div>
+      <div class="tier">
+        <div class="tname">Starter</div>
+        <div class="price" data-m="19" data-j="190">19 €<small> / Monat</small></div>
+        <div class="per" data-per-m="im Voraus, monatlich neu entscheiden" data-per-j="im Voraus, entspricht 15,83 € / Monat">im Voraus, monatlich neu entscheiden</div>
+        <p class="desc">Für Einzelunternehmer und kleine Werkstätten.</p>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>2 Nutzer</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>1.000 Artikel</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Beliebig viele Lagerorte</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Etiketten, Offline-Modus, Export</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Support per E-Mail</li>
+        </ul>
+        <a class="btn primary block" href="registrieren.html">Mit Test starten</a>
+      </div>
+      <div class="tier pop">
+        <div class="badge">Beliebt</div>
+        <div class="tname">Team</div>
+        <div class="price" data-m="49" data-j="490">49 €<small> / Monat</small></div>
+        <div class="per" data-per-m="im Voraus, monatlich neu entscheiden" data-per-j="im Voraus, entspricht 40,83 € / Monat">im Voraus, monatlich neu entscheiden</div>
+        <p class="desc">Für Betriebe mit mehreren Mitarbeitern und Fahrzeugen.</p>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>10 Nutzer</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>10.000 Artikel</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Rollen: Administrator &amp; Mitarbeiter</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Bewegungsjournal je Nutzer &amp; Gerät</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Bevorzugter Support</li>
+        </ul>
+        <a class="btn primary block" href="registrieren.html">Mit Test starten</a>
+      </div>
+      <div class="tier">
+        <div class="tname">Business</div>
+        <div class="price" data-m="99" data-j="990">99 €<small> / Monat</small></div>
+        <div class="per" data-per-m="im Voraus, monatlich neu entscheiden" data-per-j="im Voraus, entspricht 82,50 € / Monat">im Voraus, monatlich neu entscheiden</div>
+        <p class="desc">Für größere Lager und mehrere Standorte.</p>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>30 Nutzer</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Artikel ohne praktische Grenze</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Alles aus Team</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Persönliche Einrichtungshilfe</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Support per Telefon</li>
+        </ul>
+        <a class="btn primary block" href="registrieren.html">Mit Test starten</a>
+      </div>
+    </div>
+    <p class="pricenote">Alle Preise sind Endpreise; gemäß § 19 UStG wird keine Umsatzsteuer ausgewiesen. Den Tarif wählen Sie in der App, die Rechnung kommt per E-Mail mit Bankverbindung und GiroCode. Freischaltung nach Zahlungseingang, in der Regel innerhalb von 1–2 Werktagen. Läuft der Zeitraum ab, entscheiden Sie neu – nichts verlängert sich von selbst.</p>
+  </div>
+</section>
+
+<section id="faq">
+  <div class="wrap">
+    <div class="sec-head"><p class="eyebrow">Häufige Fragen</p><h2>Kurz beantwortet</h2></div>
+    <div class="faq">
+      <details><summary>Wie bezahle ich?<svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></summary><p>Per Überweisung. Sie wählen in der App einen Tarif und erhalten sofort eine Rechnung mit unserer Bankverbindung, Verwendungszweck und einem GiroCode. Den GiroCode scannen Sie mit Ihrer Banking-App – Betrag und Verwendungszweck sind dann bereits ausgefüllt. Nach Zahlungseingang schalten wir den Tarif frei; bis dahin läuft Ihr Test bzw. der bisherige Zeitraum weiter.</p></details>
+      <details><summary>Was passiert, wenn ich kein Internet habe?<svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></summary><p>Sie arbeiten einfach weiter. Artikel, Lagerorte und Bestände sind auf dem Gerät gespeichert, jede Buchung landet in einer Warteschlange. Sobald wieder Netz da ist, überträgt die App alles automatisch. Der Bestand auf Ihrem Gerät berücksichtigt die wartenden Buchungen bereits.</p></details>
+      <details><summary>Welche Barcodes kann ich verwenden?<svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></summary><p>Ihre eigenen: Die App vergibt fortlaufende Nummern mit Ihrem Präfix (z. B. KB-000017) oder Sie tragen beliebige Codes ein. Gedruckt wird als QR-Code oder Code 128. Zusätzlich lassen sich vorhandene EAN-13/EAN-8/UPC-Codes vom Hersteller einem Artikel zuordnen – ein Artikel kann mehrere Codes haben.</p></details>
+      <details><summary>Wie drucke ich Etiketten?<svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></summary><p>Auf jedem normalen Drucker mit A4-Etikettenbögen (z. B. Avery Zweckform 3474, 3651, 3422, 4780, 3659 oder eigene Maße). Einzeletiketten gehen über den Druckdialog auf Etikettendrucker von Brother, Dymo, Zebra und anderen. Der Bogen wird im Browser erzeugt – keine Zusatzsoftware.</p></details>
+      <details><summary>Brauche ich einen Handscanner?<svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></summary><p>Nein. Die Kamera des Smartphones oder Tablets reicht. Wenn Sie bereits USB- oder Bluetooth-Scanner besitzen, funktionieren diese ebenfalls – sie geben den Code wie eine Tastatur ein, die App erkennt das automatisch.</p></details>
+      <details><summary>Kann ich meine bisherigen Daten übernehmen?<svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></summary><p>Ja. Artikel importieren Sie als CSV-Datei aus Excel (Artikelnummer, Bezeichnung, Einheit, Mindestbestand, EAN). Und Ihre Daten gehören Ihnen: Bestände und Bewegungen lassen sich jederzeit als CSV oder JSON exportieren.</p></details>
+      <details><summary>Wo liegen meine Daten?<svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></summary><p>In einem Rechenzentrum in Frankfurt am Main (Supabase, EU), verschlüsselt übertragen und täglich gesichert. Die Kamera wird nur lokal zum Lesen der Codes genutzt – es werden keine Bilder übertragen. Einen Vertrag zur Auftragsverarbeitung stellen wir auf Anfrage bereit.</p></details>
+      <details><summary>Wie kündige ich?<svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></summary><p>Gar nicht nötig. Es gibt keine automatische Verlängerung und keine Abbuchung. Läuft der bezahlte Zeitraum ab, erinnern wir Sie vorher per E-Mail; ohne neue Zahlung wird der Zugang nach einer Kulanzfrist von 7 Tagen auf Lesen und Export beschränkt. Auf Wunsch löschen wir alle Daten sofort.</p></details>
+    </div>
+  </div>
+</section>
+
+<section id="kontakt" class="alt">
+  <div class="wrap">
+    <div class="contact">
+      <div>
+        <p class="eyebrow">Kontakt</p>
+        <h2>Fragen? Einrichtungshilfe? Einfach melden.</h2>
+        <p class="muted">Wir antworten in der Regel innerhalb eines Werktags. Gerne richten wir Ihr erstes Lager gemeinsam mit Ihnen ein.</p>
+        <div class="kv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="m4 7 8 6 8-6"/></svg><div><b>E-Mail</b><a href="mailto:kontakt@vaydena.de">kontakt@vaydena.de</a></div></div>
+        <div class="kv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/></svg><div><b>Telefon</b><a href="tel:+4915124012554">0151 24012554</a></div></div>
+        <div class="kv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s7-6.5 7-12a7 7 0 0 0-14 0c0 5.5 7 12 7 12Z"/><circle cx="12" cy="10" r="2.5"/></svg><div><b>Anschrift</b>Vaydena – Softwarelösungen, Biberstraße 27, 85354 Freising</div></div>
+      </div>
+      <form class="card" id="leadForm" novalidate>
+        <div id="leadMsg" class="msg" role="status"></div>
+        <div class="field"><label for="lf-firma">Firma</label><input id="lf-firma" name="firma" type="text" maxlength="200" autocomplete="organization"></div>
+        <div class="field"><label for="lf-name">Name</label><input id="lf-name" name="name" type="text" maxlength="120" autocomplete="name"></div>
+        <div class="field"><label for="lf-email">E-Mail *</label><input id="lf-email" name="email" type="email" required maxlength="200" autocomplete="email"></div>
+        <div class="field"><label for="lf-msg">Nachricht *</label><textarea id="lf-msg" name="nachricht" rows="5" required maxlength="3000" placeholder="Wie groß ist Ihr Lager, was möchten Sie erreichen?"></textarea></div>
+        <div class="hp" aria-hidden="true"><label>Website<input name="website" type="text" tabindex="-1" autocomplete="off"></label></div>
+        <button class="btn primary block" type="submit">Nachricht senden</button>
+        <p class="formnote">Mit dem Absenden stimmen Sie der Verarbeitung Ihrer Angaben zur Bearbeitung der Anfrage zu. Details in der <a href="datenschutz.html">Datenschutzerklärung</a>.</p>
+      </form>
+    </div>
+  </div>
+</section>
+
+<section class="tight">
+  <div class="wrap">
+    <div class="ctaband center">
+      <h2>Heute Etiketten drucken, morgen scannen.</h2>
+      <p>14 Tage kostenlos mit allen Funktionen. Keine Zahlungsdaten, kein Vertrag, kein Risiko.</p>
+      <a class="btn gold lg" href="registrieren.html">Jetzt kostenlos testen</a>
+    </div>
+  </div>
+</section>
+
+<footer class="site"><div class="wrap">
+  <div class="cols">
+    <div>
+      <a class="brand" href="index.html"><svg class="logo" viewBox="0 0 40 40" aria-hidden="true"><path d="M38 20 29 35.6H11L2 20 11 4.4h18z" fill="#0e6f6b"/><circle cx="20" cy="20" r="8" fill="#0b1a24"/><path d="M38 20 29 35.6H11L2 20 11 4.4h18z" fill="none" stroke="#e0a423" stroke-width="2.4"/></svg><span>Vaydena<small>Lager</small></span></a>
+      <p>Lagerverwaltung mit eigenen Barcodes, Smartphone-Scanner und Offline-Modus. Abrechnung per Überweisung und GiroCode.</p>
+    </div>
+    <div><h4>Produkt</h4><a href="#funktionen">Funktionen</a><a href="#offline">Offline-Modus</a><a href="#preise">Preise</a><a href="#faq">FAQ</a></div>
+    <div><h4>Konto</h4><a href="anmelden.html">Anmelden</a><a href="registrieren.html">Kostenlos testen</a><a href="app.html">App öffnen</a><a href="anmelden.html#passwort">Passwort vergessen</a></div>
+    <div><h4>Rechtliches</h4><a href="impressum.html">Impressum</a><a href="datenschutz.html">Datenschutz</a><a href="agb.html">AGB</a><a href="mailto:kontakt@vaydena.de">kontakt@vaydena.de</a></div>
+  </div>
+  <div class="fbot"><span>© <span data-year>2026</span> Vaydena – Softwarelösungen · lagerverwaltung.vaydena.de</span><span>Ein Produkt von <a href="https://vaydena.de">vaydena.de</a></span></div>
+</div></footer>
+
+<script src="assets/site.js"></script>
+<script src="assets/auth.js"></script>
+<script>
+(function () {
+  // Preis-Umschalter Monat/Jahr
+  var buttons = document.querySelectorAll('.ptoggle button');
+  function setPeriod(p) {
+    var yearly = p === 'jahr';
+    buttons.forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-period') === p); });
+    document.querySelectorAll('.tier .price[data-m]').forEach(function (el) {
+      el.innerHTML = (yearly ? el.getAttribute('data-j') : el.getAttribute('data-m')) + ' €<small> / ' + (yearly ? 'Jahr' : 'Monat') + '</small>';
+    });
+    document.querySelectorAll('.tier .per[data-per-m]').forEach(function (el) {
+      el.textContent = yearly ? el.getAttribute('data-per-j') : el.getAttribute('data-per-m');
+    });
+  }
+  buttons.forEach(function (b) { b.addEventListener('click', function () { setPeriod(b.getAttribute('data-period')); }); });
+
+  // Kontaktformular -> lager-public "lead"
+  var form = document.getElementById('leadForm');
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var msg = document.getElementById('leadMsg');
+    var btn = form.querySelector('button[type=submit]');
+    var email = form.email.value.trim(), text = form.nachricht.value.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { msg.className = 'msg err'; msg.textContent = LV.ERRORS.bad_email; return; }
+    if (text.length < 5) { msg.className = 'msg err'; msg.textContent = LV.ERRORS.bad_message; return; }
+    btn.disabled = true; btn.textContent = 'Wird gesendet …'; msg.className = 'msg';
+    LV.publicCall('lead', { firma: form.firma.value.trim(), name: form.name.value.trim(), email: email, nachricht: text, hp: form.website.value })
+      .then(function (r) {
+        btn.disabled = false; btn.textContent = 'Nachricht senden';
+        if (r.data && r.data.ok) { msg.className = 'msg ok'; msg.textContent = 'Vielen Dank! Wir melden uns in der Regel innerhalb eines Werktags.'; form.reset(); }
+        else { msg.className = 'msg err'; msg.textContent = LV.errText(r); }
+      });
+  });
+})();
+</script>
+</body>
+</html>

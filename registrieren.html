@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kostenlos testen – Vaydena Lager</title>
+<meta name="description" content="Vaydena Lager 14 Tage kostenlos testen: Firma anlegen, eigene Barcodes drucken, mit dem Smartphone scannen – auch offline. Keine Zahlungsdaten nötig.">
+<meta name="robots" content="noindex,follow">
+<meta name="theme-color" content="#0b1a24">
+<link rel="icon" href="assets/icons/favicon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+<link rel="stylesheet" href="assets/app.css">
+<style>
+  .check{display:flex;gap:10px;align-items:flex-start;font-size:.92rem;color:var(--ink-2);margin:4px 0 18px}
+  .check input{width:auto;margin-top:4px;accent-color:var(--primary)}
+  .hp{position:absolute;left:-9999px;top:-9999px;height:0;width:0;opacity:0}
+  .pwwrap{position:relative}
+  .pwwrap button{position:absolute;right:8px;top:50%;transform:translateY(-50%);border:0;background:none;color:var(--primary-d);font:inherit;font-size:.85rem;font-weight:700;cursor:pointer;padding:6px 8px}
+</style>
+</head>
+<body>
+
+<header class="site"><div class="wrap">
+  <div class="nav">
+    <a class="brand" href="index.html"><svg class="logo" viewBox="0 0 40 40" aria-hidden="true"><path d="M38 20 29 35.6H11L2 20 11 4.4h18z" fill="#0e6f6b"/><circle cx="20" cy="20" r="8" fill="#0b1a24"/><path d="M38 20 29 35.6H11L2 20 11 4.4h18z" fill="none" stroke="#e0a423" stroke-width="2.4"/></svg><span>Vaydena<small>Lager</small></span></a>
+    <div class="spacer"></div>
+    <nav class="nav-links" aria-label="Hauptnavigation"><a href="index.html#funktionen">Funktionen</a><a href="index.html#preise">Preise</a><a href="index.html#faq">FAQ</a></nav>
+    <div class="nav-cta"><a class="btn ghost sm" href="anmelden.html">Anmelden</a></div>
+    <button class="nav-toggle" aria-label="Menü öffnen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  </div>
+  <div class="mobile-menu"><a href="index.html#funktionen">Funktionen</a><a href="index.html#preise">Preise</a><a href="index.html#faq">FAQ</a><a href="anmelden.html">Anmelden</a></div>
+</div></header>
+
+<main class="authwrap">
+  <div>
+    <p class="eyebrow">14 Tage kostenlos</p>
+    <h1>Firma anlegen und loslegen</h1>
+    <p class="muted">Keine Zahlungsdaten, keine Kündigung. Der Test endet von selbst – Ihre Daten bleiben erhalten.</p>
+    <ul class="aside-list">
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Alle Funktionen: Scanner, Etiketten, Offline-Modus, Team</li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Bis 10 Nutzer und 10.000 Artikel im Test</li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Danach Tarif wählen und per Überweisung bezahlen – oder einfach nichts tun</li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Server in Frankfurt, Export jederzeit</li>
+    </ul>
+  </div>
+
+  <form class="authcard" id="regForm" novalidate>
+    <h2 class="mt0">Kostenlos registrieren</h2>
+    <div id="msg" class="msg" role="alert"></div>
+    <div class="field"><label for="company">Firma / Betrieb *</label><input id="company" name="company" type="text" required maxlength="200" autocomplete="organization" placeholder="z. B. Elektro Huber GmbH"></div>
+    <div class="field"><label for="name">Ihr Name</label><input id="name" name="name" type="text" maxlength="120" autocomplete="name"></div>
+    <div class="field"><label for="email">E-Mail *</label><input id="email" name="email" type="email" required maxlength="200" autocomplete="email" inputmode="email"><div class="hint">Damit melden Sie sich an. Wir schicken keine Werbung.</div></div>
+    <div class="field"><label for="password">Passwort *</label><div class="pwwrap"><input id="password" name="password" type="password" required minlength="8" maxlength="200" autocomplete="new-password"><button type="button" id="pwToggle" aria-label="Passwort anzeigen">anzeigen</button></div><div class="hint">Mindestens 8 Zeichen.</div></div>
+    <label class="check"><input type="checkbox" id="agb" required><span>Ich habe die <a href="agb.html" target="_blank" rel="noopener">AGB</a> und die <a href="datenschutz.html" target="_blank" rel="noopener">Datenschutzerklärung</a> gelesen und nutze Vaydena Lager als Unternehmer (B2B).</span></label>
+    <div class="hp" aria-hidden="true"><label>Website<input name="website" type="text" tabindex="-1" autocomplete="off"></label></div>
+    <button class="btn gold block lg" type="submit" id="btnReg">Zugang anlegen</button>
+    <p class="formnote">Schon registriert? <a href="anmelden.html">Anmelden</a></p>
+  </form>
+</main>
+
+<footer class="site"><div class="wrap">
+  <div class="fbot"><span>© <span data-year>2026</span> Vaydena – Softwarelösungen</span><span><a href="impressum.html">Impressum</a> · <a href="datenschutz.html">Datenschutz</a> · <a href="agb.html">AGB</a></span></div>
+</div></footer>
+
+<script src="assets/supabase.js"></script>
+<script src="assets/auth.js"></script>
+<script src="assets/site.js"></script>
+<script>
+(function () {
+  var form = document.getElementById('regForm'), msg = document.getElementById('msg'), btn = document.getElementById('btnReg');
+  var pw = document.getElementById('password');
+  document.getElementById('pwToggle').addEventListener('click', function () {
+    var show = pw.type === 'password'; pw.type = show ? 'text' : 'password'; this.textContent = show ? 'verbergen' : 'anzeigen';
+  });
+  function show(kind, text) { msg.className = 'msg ' + kind; msg.textContent = text; }
+
+  // Bereits angemeldet? Dann direkt in die App.
+  LV.currentSession().then(function (s) {
+    if (!s) return;
+    LV.apiCall('me').then(function (r) { if (r.data && r.data.registered) location.replace('app.html'); });
+  });
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var company = form.company.value.trim(), name = form.name.value.trim(), email = form.email.value.trim().toLowerCase(), password = pw.value;
+    if (company.length < 2) return show('err', LV.ERRORS.bad_company);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return show('err', LV.ERRORS.bad_email);
+    if (password.length < 8) return show('err', LV.ERRORS.bad_password);
+    if (!document.getElementById('agb').checked) return show('err', 'Bitte AGB und Datenschutzerklärung bestätigen.');
+    btn.disabled = true; btn.textContent = 'Zugang wird angelegt …'; msg.className = 'msg';
+    LV.publicCall('register', { company: company, name: name, email: email, password: password, hp: form.website.value })
+      .then(function (r) {
+        if (!(r.data && r.data.ok)) {
+          btn.disabled = false; btn.textContent = 'Zugang anlegen';
+          return show('err', LV.errText(r));
+        }
+        btn.textContent = 'Anmeldung läuft …';
+        return LV.signIn(email, password).then(function (res) {
+          if (res && res.data && res.data.session) { location.replace('app.html?welcome=1'); return; }
+          location.replace('anmelden.html?email=' + encodeURIComponent(email) + '&registered=1');
+        });
+      });
+  });
+})();
+</script>
+</body>
+</html>

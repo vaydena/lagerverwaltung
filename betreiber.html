@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Betreiber – Vaydena Lager</title>
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#0b1a24">
+<link rel="icon" href="assets/icons/favicon-32.png" sizes="32x32">
+<link rel="stylesheet" href="assets/app.css">
+<style>
+  .top{position:sticky;top:0;z-index:40;background:var(--navy);color:#fff;padding:10px 0;box-shadow:var(--shadow-s)}
+  .top .wrap{display:flex;align-items:center;gap:14px}
+  .top .brand{color:#fff;display:inline-flex;align-items:center;gap:10px;font-weight:800}
+  .top .brand small{color:var(--gold);font-weight:700;margin-left:4px}
+  .top .spacer{flex:1}
+  .top .who{font-size:.85rem;color:var(--navy-muted)}
+  .admin{max-width:var(--maxw);margin:0 auto;padding:22px 22px 70px}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 22px}
+  .tabs button{font:inherit;font-weight:700;font-size:.92rem;padding:9px 16px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink-2);cursor:pointer}
+  .tabs button.on{background:var(--primary);color:#fff;border-color:var(--primary)}
+  .panel{display:none}.panel.on{display:block}
+  .bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+  .bar input,.bar select{font:inherit;padding:9px 12px;border:1.5px solid var(--line);border-radius:10px;background:#fff;min-width:200px}
+  .bar .cnt{color:var(--muted);font-size:.88rem}
+  .tscroll{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow-s)}
+  table.a{width:100%;border-collapse:collapse;font-size:.92rem;min-width:820px}
+  table.a th,table.a td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--line);vertical-align:middle;white-space:nowrap}
+  table.a th{font-size:.74rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);background:var(--bg-2)}
+  table.a tr:last-child td{border-bottom:0}
+  table.a tbody tr.click{cursor:pointer}
+  table.a tbody tr.click:hover{background:var(--primary-l)}
+  table.a td.num{text-align:right;font-variant-numeric:tabular-nums}
+  table.a td.wrap{white-space:normal;min-width:220px}
+  .st{display:inline-block;padding:3px 9px;border-radius:999px;font-size:.74rem;font-weight:800;white-space:nowrap}
+  .st.ok{background:var(--ok-l);color:#136b48}.st.warn{background:var(--gold-l);color:var(--gold-d)}.st.bad{background:#fdecec;color:#a32020}.st.off{background:#e8ecee;color:#5c6f77}.st.teal{background:var(--primary-l);color:var(--primary-d)}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px}
+  .stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;box-shadow:var(--shadow-s)}
+  .stat .n{font-size:1.9rem;font-weight:800;letter-spacing:-.02em;color:var(--primary-d)}
+  .stat .l{font-size:.78rem;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.06em}
+  .drawer{position:fixed;inset:0;background:rgba(11,26,36,.45);display:none;z-index:60}
+  .drawer.on{display:block}
+  .drawer .panelbox{position:absolute;top:0;right:0;bottom:0;width:min(760px,100%);background:var(--bg);overflow-y:auto;padding:22px;box-shadow:var(--shadow-l)}
+  .dhead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px;position:sticky;top:-22px;background:var(--bg);padding:6px 0;z-index:1}
+  .dhead h2{font-size:1.35rem;margin:0}
+  .x{background:var(--surface);border:1px solid var(--line);border-radius:10px;width:38px;height:38px;font-size:1.3rem;cursor:pointer;flex:0 0 auto}
+  .box{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px;margin-bottom:14px;box-shadow:var(--shadow-s)}
+  .box h3{font-size:1rem;margin-bottom:12px}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:.92rem}
+  .kv .k{color:var(--muted);font-weight:700}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+  .row .field{margin:0;flex:1 1 140px}
+  .field textarea{min-height:80px;resize:vertical}
+  .box.danger{border-color:#f3c9c9}
+  .btn.danger{background:#c62828;color:#fff}
+  .btn.xs{padding:5px 10px;font-size:.78rem;border-radius:8px}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--navy);color:#fff;padding:12px 18px;border-radius:12px;font-weight:700;box-shadow:var(--shadow-l);opacity:0;pointer-events:none;transition:opacity .2s;z-index:80;max-width:90vw;text-align:center}
+  .toast.on{opacity:1}
+  .toast.err{background:#a32020}
+  .lead{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;margin-bottom:12px;box-shadow:var(--shadow-s)}
+  .lead .h{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:.92rem}
+  .lead .m{white-space:pre-wrap;margin:8px 0 0;font-size:.95rem;color:var(--ink-2)}
+  .mono{font-family:ui-monospace,Consolas,monospace;font-size:.82rem;word-break:break-all}
+  .login{max-width:460px;margin:60px auto;padding:0 22px}
+</style>
+</head>
+<body>
+
+<div class="top"><div class="wrap">
+  <a class="brand" href="index.html"><svg class="logo" viewBox="0 0 40 40" width="28" height="28" aria-hidden="true"><path d="M38 20 29 35.6H11L2 20 11 4.4h18z" fill="#0e6f6b"/><circle cx="20" cy="20" r="8" fill="#fff"/><path d="M38 20 29 35.6H11L2 20 11 4.4h18z" fill="none" stroke="#e0a423" stroke-width="2.4"/></svg>Vaydena Lager <small>Betreiber</small></a>
+  <div class="spacer"></div>
+  <span class="who hide" id="who">angemeldet</span>
+  <button class="btn ghost on-navy sm hide" type="button" id="btnLogout">Abmelden</button>
+</div></div>
+
+<!-- Login -->
+<div class="login" id="login">
+  <form class="authcard" id="loginForm" novalidate>
+    <h1 class="mt0" style="font-size:1.5rem">Betreiber-Zugang</h1>
+    <p class="muted">Bitte den Betreiberschlüssel eingeben. Er wird nur für diese Browser-Sitzung gespeichert.</p>
+    <div id="loginMsg" class="msg" role="alert"></div>
+    <div class="field"><label for="akey">Betreiberschlüssel</label><input id="akey" type="password" autocomplete="current-password" required></div>
+    <button class="btn primary block" type="submit" id="btnKey">Anmelden</button>
+  </form>
+</div>
+
+<!-- App -->
+<main class="admin hide" id="app">
+  <div class="tabs" role="tablist">
+    <button type="button" data-tab="tenants" class="on">Mandanten</button>
+    <button type="button" data-tab="invoices">Rechnungen</button>
+    <button type="button" data-tab="leads">Anfragen</button>
+    <button type="button" data-tab="stats">Statistik</button>
+  </div>
+
+  <section class="panel on" id="panel-tenants">
+    <div class="bar">
+      <input id="tSearch" type="search" placeholder="Suche Firma / E-Mail …">
+      <select id="tFilter">
+        <option value="">Alle</option>
+        <option value="active">Aktiv nutzbar</option>
+        <option value="inactive">Nicht nutzbar (abgelaufen/gesperrt)</option>
+        <option value="trial">Testphase</option>
+        <option value="paying">Bezahlte Tarife</option>
+        <option value="open">Mit offenen Rechnungen</option>
+      </select>
+      <span class="cnt" id="tCount"></span>
+      <span class="spacer" style="flex:1"></span>
+      <button class="btn ghost sm" type="button" id="tReload">Neu laden</button>
+    </div>
+    <div class="tscroll"><table class="a">
+      <thead><tr><th>Firma</th><th>Tarif</th><th>Abo</th><th>Bis</th><th class="num">Nutzer</th><th class="num">Artikel</th><th class="num">Offen</th><th>Angelegt</th></tr></thead>
+      <tbody id="tBody"><tr><td colspan="8" class="muted">Lade …</td></tr></tbody>
+    </table></div>
+  </section>
+
+  <section class="panel" id="panel-invoices">
+    <div class="bar">
+      <select id="iFilter">
+        <option value="open">Offen</option>
+        <option value="paid">Bezahlt</option>
+        <option value="void">Storniert</option>
+        <option value="">Alle</option>
+      </select>
+      <span class="cnt" id="iCount"></span>
+      <span class="spacer" style="flex:1"></span>
+      <button class="btn ghost sm" type="button" id="iReload">Neu laden</button>
+    </div>
+    <div class="tscroll"><table class="a">
+      <thead><tr><th>Nr.</th><th>Firma</th><th>Tarif</th><th class="num">Betrag</th><th>Status</th><th>Ausgestellt</th><th>Fällig</th><th>Aktionen</th></tr></thead>
+      <tbody id="iBody"><tr><td colspan="8" class="muted">Lade …</td></tr></tbody>
+    </table></div>
+    <p class="formnote">Zahlungseingang auf dem Konto prüfen (Verwendungszweck = Rechnungsnummer), dann „Bezahlt“ klicken: Der Tarif wird sofort um die Laufzeit verlängert und der Kunde bekommt eine Bestätigung.</p>
+  </section>
+
+  <section class="panel" id="panel-leads">
+    <div class="bar"><span class="cnt" id="lCount"></span><span class="spacer" style="flex:1"></span><button class="btn ghost sm" type="button" id="lReload">Neu laden</button></div>
+    <div id="leads"><p class="muted">Lade …</p></div>
+  </section>
+
+  <section class="panel" id="panel-stats">
+    <div class="cards" id="stats"></div>
+  </section>
+</main>
+
+<!-- Drawer -->
+<div class="drawer" id="drawer" aria-hidden="true">
+  <div class="panelbox" role="dialog" aria-modal="true" aria-labelledby="dTitle">
+    <div class="dhead"><h2 id="dTitle">Mandant</h2><button class="x" type="button" id="dClose" aria-label="Schließen">×</button></div>
+    <div id="dBody"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script src="assets/auth.js"></script>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var e = LV.esc;
+  var KEY = 'lv_admin_key';
+  var key = '';
+  try { key = sessionStorage.getItem(KEY) || ''; } catch (err) { key = ''; }
+  var PLANS = { trial: 'Test', starter: 'Starter', team: 'Team', business: 'Business' };
+  var toastTimer = null;
+
+  function toast(text, isErr) {
+    var t = $('toast'); t.textContent = text; t.className = 'toast on' + (isErr ? ' err' : '');
+    clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.className = 'toast'; }, isErr ? 5000 : 3000);
+  }
+  function showMsg(el, kind, text) { el.className = 'msg ' + kind; el.textContent = text; }
+  function fallbackCopy(t) {
+    try { var ta = document.createElement('textarea'); ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); var ok = document.execCommand('copy'); document.body.removeChild(ta); return ok; } catch (err) { return false; }
+  }
+  function copyText(t) {
+    if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(t).then(function () { return true; }, function () { return fallbackCopy(t); });
+    return Promise.resolve(fallbackCopy(t));
+  }
+
+  function call(action, payload) {
+    return LV.adminCall(key, action, payload).then(function (r) {
+      if (r.status === 401) { logout('Der Schlüssel ist ungültig. Bitte erneut anmelden.'); return { status: 401, data: { error: 'unauthorized' } }; }
+      return r;
+    });
+  }
+  function logout(msgText) {
+    try { sessionStorage.removeItem(KEY); } catch (err) {}
+    key = '';
+    $('app').classList.add('hide'); $('btnLogout').classList.add('hide'); $('who').classList.add('hide');
+    $('login').classList.remove('hide');
+    closeDrawer();
+    if (msgText) showMsg($('loginMsg'), 'err', msgText);
+  }
+  function start() {
+    $('login').classList.add('hide');
+    $('app').classList.remove('hide'); $('btnLogout').classList.remove('hide'); $('who').classList.remove('hide');
+    openTab('tenants');
+  }
+
+  // ---------- Login ----------
+  $('loginForm').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var k = $('akey').value.trim();
+    if (k.length < 16) return showMsg($('loginMsg'), 'err', 'Bitte den vollständigen Schlüssel eingeben.');
+    $('btnKey').disabled = true; $('loginMsg').className = 'msg';
+    LV.adminCall(k, 'ping').then(function (r) {
+      $('btnKey').disabled = false;
+      if (r.data && r.data.ok) {
+        key = k; try { sessionStorage.setItem(KEY, k); } catch (err) {}
+        $('akey').value = ''; start();
+      } else {
+        showMsg($('loginMsg'), 'err', r.status === 401 ? 'Schlüssel falsch.' : LV.errText(r));
+      }
+    });
+  });
+  $('btnLogout').addEventListener('click', function () { logout(); });
+  if (key) start();
+
+  // ---------- Tabs ----------
+  var loaders = { tenants: loadTenants, invoices: loadInvoices, leads: loadLeads, stats: loadStats };
+  function openTab(name) {
+    document.querySelectorAll('.tabs button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-tab') === name); });
+    document.querySelectorAll('.panel').forEach(function (p) { p.classList.toggle('on', p.id === 'panel-' + name); });
+    loaders[name]();
+  }
+  document.querySelectorAll('.tabs button').forEach(function (b) { b.addEventListener('click', function () { openTab(b.getAttribute('data-tab')); }); });
+
+  // ---------- Mandanten ----------
+  var tenants = [];
+  function subPill(t) {
+    var s = t.sub || {};
+    if (s.active) {
+      if (s.reason === 'grace') return '<span class="st warn">Kulanz</span>';
+      return '<span class="st ok">' + (t.plan === 'trial' ? 'Test' : 'Aktiv') + (s.days_left != null ? ' · ' + s.days_left + ' T.' : '') + '</span>';
+    }
+    var m = { gesperrt: 'Gesperrt', trial_expired: 'Test abgelaufen', unpaid: 'Unbezahlt', expired: 'Abgelaufen' };
+    return '<span class="st bad">' + (m[s.reason] || 'Inaktiv') + '</span>';
+  }
+  function loadTenants() {
+    $('tBody').innerHTML = '<tr><td colspan="8" class="muted">Lade …</td></tr>';
+    call('list_tenants').then(function (r) {
+      if (!(r.data && r.data.ok)) { $('tBody').innerHTML = '<tr><td colspan="8" class="muted">Fehler: ' + e(LV.errText(r)) + '</td></tr>'; return; }
+      tenants = r.data.tenants || []; renderTenants();
+    });
+  }
+  function renderTenants() {
+    var q = $('tSearch').value.trim().toLowerCase(), f = $('tFilter').value;
+    var rows = tenants.filter(function (t) {
+      var hay = ((t.name || '') + ' ' + (t.contact_email || '') + ' ' + ((t.billing && t.billing.email) || '') + ' ' + (t.notiz || '')).toLowerCase();
+      if (q && hay.indexOf(q) < 0) return false;
+      var s = t.sub || {};
+      if (f === 'active') return !!s.active;
+      if (f === 'inactive') return !s.active;
+      if (f === 'trial') return t.plan === 'trial';
+      if (f === 'paying') return t.plan !== 'trial';
+      if (f === 'open') return t.open_invoices > 0;
+      return true;
+    });
+    $('tCount').textContent = rows.length + ' von ' + tenants.length;
+    $('tBody').innerHTML = rows.length ? rows.map(function (t) {
+      return '<tr class="click" data-id="' + e(t.id) + '"><td><b>' + e(t.name) + '</b><br><span class="muted" style="font-size:.8rem">' + e(t.contact_email || '') + '</span></td>' +
+        '<td>' + e(t.plan_label) + '</td><td>' + subPill(t) + (t.status === 'gesperrt' ? ' <span class="st off">gesperrt</span>' : '') + '</td>' +
+        '<td>' + e(t.plan === 'trial' ? t.trial_ends_dmy : (t.paid_until_dmy || '–')) + '</td>' +
+        '<td class="num">' + e(t.members) + '</td><td class="num">' + e(t.items) + '</td><td class="num">' + (t.open_invoices ? e(t.open_invoices) : '') + '</td><td>' + e(t.created_dmy) + '</td></tr>';
+    }).join('') : '<tr><td colspan="8" class="muted">Keine Mandanten gefunden.</td></tr>';
+  }
+  $('tSearch').addEventListener('input', renderTenants);
+  $('tFilter').addEventListener('change', renderTenants);
+  $('tReload').addEventListener('click', loadTenants);
+  $('tBody').addEventListener('click', function (ev) {
+    var tr = ev.target.closest ? ev.target.closest('tr[data-id]') : null;
+    if (tr) openTenant(tr.getAttribute('data-id'));
+  });
+
+  // ---------- Drawer ----------
+  var cur = null;
+  function openTenant(id) {
+    $('drawer').classList.add('on'); $('drawer').setAttribute('aria-hidden', 'false');
+    $('dBody').innerHTML = '<p class="muted">Lade …</p>';
+    call('get_tenant', { tenant_id: id }).then(function (r) {
+      if (!(r.data && r.data.ok)) { toast(LV.errText(r), true); closeDrawer(); return; }
+      cur = r.data; renderDrawer();
+    });
+  }
+  function closeDrawer() { $('drawer').classList.remove('on'); $('drawer').setAttribute('aria-hidden', 'true'); cur = null; }
+  $('dClose').addEventListener('click', closeDrawer);
+  $('drawer').addEventListener('click', function (ev) { if (ev.target === $('drawer')) closeDrawer(); });
+  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && cur) closeDrawer(); });
+
+  function kv(k, v) { return '<span class="k">' + k + '</span><span>' + v + '</span>'; }
+  function invRow(v) {
+    var st = { open: '<span class="st warn">offen</span>', paid: '<span class="st ok">bezahlt</span>', void: '<span class="st off">storniert</span>' }[v.status] || e(v.status);
+    var acts = '';
+    if (v.status === 'open') acts += '<button class="btn primary xs" type="button" data-act="paid" data-id="' + e(v.id) + '">Bezahlt</button> <button class="btn ghost xs" type="button" data-act="void" data-id="' + e(v.id) + '">Storno</button> ';
+    if (v.status === 'void') acts += '<button class="btn ghost xs" type="button" data-act="open" data-id="' + e(v.id) + '">Wieder öffnen</button> ';
+    acts += '<button class="btn ghost xs" type="button" data-act="link" data-link="' + e(v.link) + '">Link</button>';
+    return '<tr><td>' + e(v.number) + '</td><td>' + e(v.plan_label) + ' / ' + (v.period === 'jahr' ? 'Jahr' : 'Monat') + '</td><td class="num">' + e(LV.euro(v.amount_cents)) + '</td>' +
+      '<td>' + st + (v.status === 'paid' && v.paid_dmy ? '<br><span class="muted" style="font-size:.78rem">' + e(v.paid_dmy) + '</span>' : '') + '</td><td>' + e(v.due_dmy) + '</td><td>' + acts + '</td></tr>';
+  }
+  function renderDrawer() {
+    var t = cur.tenant, c = cur.counts || {}, b = t.billing || {};
+    $('dTitle').textContent = t.name;
+    var h = '';
+    h += '<div class="box"><h3>Übersicht</h3><div class="kv">' +
+      kv('Tarif', e(t.plan_label) + ' ' + subPill(t)) +
+      kv('Zugang', t.status === 'aktiv' ? '<span class="st teal">aktiv</span>' : '<span class="st bad">gesperrt</span>') +
+      kv('Test bis', e(t.trial_ends_dmy || '–')) + kv('Bezahlt bis', e(t.paid_until_dmy || '–')) +
+      kv('Kontakt', e(t.contact_email || '–')) +
+      kv('Rechnung an', e([b.recipient, b.street, [b.zip, b.city].filter(Boolean).join(' '), b.email].filter(Boolean).join(', ') || '–')) +
+      kv('Code-Präfix', e(t.code_prefix)) + kv('Angelegt', e(t.created_dmy)) +
+      kv('Nutzer / Artikel', e(t.members) + ' / ' + e(t.items)) +
+      kv('Lagerorte / Buchungen', e(c.locations || 0) + ' / ' + e(c.movements || 0) + (c.last_movement_dmy ? ' (zuletzt ' + e(c.last_movement_dmy) + ')' : '')) +
+      kv('ID', '<span class="mono">' + e(t.id) + '</span>') + '</div></div>';
+    h += '<div class="box"><h3>Tarif setzen</h3><div class="row">' +
+      '<div class="field"><label for="fPlan">Tarif</label><select id="fPlan">' + Object.keys(PLANS).map(function (p) { return '<option value="' + p + '"' + (p === t.plan ? ' selected' : '') + '>' + PLANS[p] + '</option>'; }).join('') + '</select></div>' +
+      '<div class="field"><label for="fMonths">+ Monate bezahlt</label><input id="fMonths" type="number" min="0" max="60" value="0"></div>' +
+      '<div class="field"><label for="fTrial">Testtage (nur Test)</label><input id="fTrial" type="number" min="0" max="365" value="0"></div>' +
+      '<button class="btn primary sm" type="button" id="bPlan">Speichern</button></div>' +
+      '<p class="formnote mb0">„+ Monate“ verlängert „Bezahlt bis“ ab heute bzw. ab dem bisherigen Enddatum. Normalerweise passiert das automatisch über „Bezahlt“ bei der Rechnung.</p></div>';
+    h += '<div class="box"><h3>Zugang</h3><div class="row"><button class="btn sm ' + (t.status === 'aktiv' ? 'ghost' : 'primary') + '" type="button" id="bStatus">' + (t.status === 'aktiv' ? 'Mandant sperren' : 'Mandant freischalten') + '</button></div></div>';
+    h += '<div class="box"><h3>Notiz (intern)</h3><div class="field"><textarea id="fNote">' + e(t.notiz || '') + '</textarea></div><button class="btn primary sm" type="button" id="bNote">Notiz speichern</button></div>';
+    h += '<div class="box"><h3>Rechnung erstellen</h3><div class="row">' +
+      '<div class="field"><label for="fIPlan">Tarif</label><select id="fIPlan"><option value="starter"' + (t.plan === 'starter' ? ' selected' : '') + '>Starter</option><option value="team"' + (t.plan === 'team' || t.plan === 'trial' ? ' selected' : '') + '>Team</option><option value="business"' + (t.plan === 'business' ? ' selected' : '') + '>Business</option></select></div>' +
+      '<div class="field"><label for="fIPeriod">Laufzeit</label><select id="fIPeriod"><option value="monat">1 Monat</option><option value="jahr">12 Monate</option></select></div>' +
+      '<button class="btn primary sm" type="button" id="bInv">Rechnung anlegen &amp; mailen</button></div></div>';
+    h += '<div class="box"><h3>Rechnungen (' + cur.invoices.length + ')</h3>' + (cur.invoices.length ?
+      '<div class="tscroll" style="box-shadow:none"><table class="a" style="min-width:600px"><thead><tr><th>Nr.</th><th>Tarif</th><th class="num">Betrag</th><th>Status</th><th>Fällig</th><th>Aktionen</th></tr></thead><tbody>' + cur.invoices.map(invRow).join('') + '</tbody></table></div>' :
+      '<p class="muted mb0">Noch keine Rechnungen.</p>') + '</div>';
+    h += '<div class="box"><h3>Nutzer (' + cur.members.length + ')</h3><div class="tscroll" style="box-shadow:none"><table class="a" style="min-width:520px"><thead><tr><th>Name</th><th>E-Mail</th><th>Rolle</th><th>Status</th><th>Seit</th></tr></thead><tbody>' +
+      cur.members.map(function (m) { return '<tr><td>' + e(m.name || '–') + '</td><td>' + e(m.email || '') + '</td><td>' + e(m.role) + '</td><td>' + (m.active ? '<span class="st ok">aktiv</span>' : '<span class="st off">inaktiv</span>') + '</td><td>' + e(m.created_dmy) + '</td></tr>'; }).join('') +
+      '</tbody></table></div></div>';
+    h += '<div class="box danger"><h3>Mandant löschen</h3><p class="muted" style="font-size:.9rem">Löscht Firma, Nutzer, Artikel, Buchungen und Rechnungen unwiderruflich (Auth-Konten werden entfernt, sofern sie nicht in einem anderen Vaydena-Produkt genutzt werden). Zur Bestätigung den Firmennamen exakt eingeben: <b>' + e(t.name) + '</b></p>' +
+      '<div class="row"><div class="field"><input id="fConfirm" placeholder="Firmenname" autocomplete="off"></div><button class="btn danger sm" type="button" id="bDel">Endgültig löschen</button></div></div>';
+    $('dBody').innerHTML = h;
+    bindDrawer();
+  }
+  function bindDrawer() {
+    var t = cur.tenant;
+    function refresh() { openTenant(t.id); loadTenants(); }
+    function done(okText) { return function (r) { if (r.data && r.data.ok) { toast(okText); refresh(); } else toast(LV.errText(r), true); }; }
+    $('bPlan').addEventListener('click', function () {
+      this.disabled = true;
+      call('set_plan', { tenant_id: t.id, plan: $('fPlan').value, months: Number($('fMonths').value) || 0, trial_days: Number($('fTrial').value) || 0 }).then(done('Tarif gespeichert.'));
+    });
+    $('bStatus').addEventListener('click', function () {
+      var to = t.status === 'aktiv' ? 'gesperrt' : 'aktiv';
+      if (to === 'gesperrt' && !confirm('Mandant „' + t.name + '“ sperren? Die Nutzer können dann nicht mehr synchronisieren.')) return;
+      this.disabled = true;
+      call('set_status', { tenant_id: t.id, status: to }).then(done(to === 'aktiv' ? 'Mandant freigeschaltet.' : 'Mandant gesperrt.'));
+    });
+    $('bNote').addEventListener('click', function () {
+      this.disabled = true;
+      call('set_note', { tenant_id: t.id, notiz: $('fNote').value }).then(done('Notiz gespeichert.'));
+    });
+    $('bInv').addEventListener('click', function () {
+      var btn = this; btn.disabled = true;
+      call('create_invoice', { tenant_id: t.id, plan: $('fIPlan').value, period: $('fIPeriod').value }).then(function (r) {
+        btn.disabled = false;
+        if (r.data && r.data.ok) {
+          var inv = r.data.invoice;
+          toast('Rechnung ' + inv.number + ' angelegt' + (inv.emailed ? ' und per E-Mail verschickt.' : ' – keine E-Mail-Adresse hinterlegt, Link bitte manuell senden.'));
+          refresh();
+        } else toast(LV.errText(r), true);
+      });
+    });
+    $('bDel').addEventListener('click', function () {
+      var c = $('fConfirm').value.trim();
+      if (c !== t.name) return toast(LV.ERRORS.confirm_mismatch, true);
+      if (!confirm('Wirklich endgültig löschen: ' + t.name + '?')) return;
+      this.disabled = true;
+      call('delete_tenant', { tenant_id: t.id, confirm: c }).then(function (r) {
+        if (r.data && r.data.ok) { toast('Mandant gelöscht (' + (r.data.deleted_users || 0) + ' Auth-Konten entfernt).'); closeDrawer(); loadTenants(); }
+        else toast(LV.errText(r), true);
+      });
+    });
+    $('dBody').querySelectorAll('[data-act]').forEach(function (b) {
+      b.addEventListener('click', function () { invoiceAction(b.getAttribute('data-act'), b.getAttribute('data-id'), b.getAttribute('data-link'), refresh); });
+    });
+  }
+  function invoiceAction(act, id, link, after) {
+    if (act === 'link') { copyText(link).then(function (ok) { toast(ok ? 'Zahllink kopiert.' : link); }); return; }
+    if (act === 'paid') {
+      if (!confirm('Rechnung als bezahlt markieren? Der Tarif wird sofort um die Laufzeit verlängert und der Kunde erhält eine Bestätigung.')) return;
+      call('mark_paid', { invoice_id: id }).then(function (r) {
+        if (r.data && r.data.ok) { toast('Bezahlt – Tarif bis ' + r.data.paid_until_dmy + ' freigeschaltet.'); after(); }
+        else toast(r.data && r.data.error === 'already_paid' ? 'Diese Rechnung ist bereits als bezahlt markiert.' : LV.errText(r), true);
+      });
+      return;
+    }
+    if (act === 'void' && !confirm('Rechnung stornieren?')) return;
+    call('set_invoice_status', { invoice_id: id, status: act === 'void' ? 'void' : 'open' }).then(function (r) {
+      if (r.data && r.data.ok) { toast(act === 'void' ? 'Rechnung storniert.' : 'Rechnung wieder geöffnet.'); after(); }
+      else toast(LV.errText(r), true);
+    });
+  }
+
+  // ---------- Rechnungen ----------
+  function loadInvoices() {
+    var st = $('iFilter').value;
+    $('iBody').innerHTML = '<tr><td colspan="8" class="muted">Lade …</td></tr>';
+    call('list_invoices', st ? { status: st } : {}).then(function (r) {
+      if (!(r.data && r.data.ok)) { $('iBody').innerHTML = '<tr><td colspan="8" class="muted">Fehler: ' + e(LV.errText(r)) + '</td></tr>'; return; }
+      var rows = (r.data.invoices || []).filter(function (v) { return !st || v.status === st; });
+      $('iCount').textContent = rows.length + ' Rechnung' + (rows.length === 1 ? '' : 'en');
+      $('iBody').innerHTML = rows.length ? rows.map(function (v) {
+        var stl = { open: '<span class="st warn">offen</span>', paid: '<span class="st ok">bezahlt</span>', void: '<span class="st off">storniert</span>' }[v.status] || e(v.status);
+        var acts = '';
+        if (v.status === 'open') acts += '<button class="btn primary xs" type="button" data-act="paid" data-id="' + e(v.id) + '">Bezahlt</button> <button class="btn ghost xs" type="button" data-act="void" data-id="' + e(v.id) + '">Storno</button> ';
+        if (v.status === 'void') acts += '<button class="btn ghost xs" type="button" data-act="open" data-id="' + e(v.id) + '">Wieder öffnen</button> ';
+        acts += '<button class="btn ghost xs" type="button" data-act="link" data-link="' + e(v.link) + '">Link</button>';
+        return '<tr><td><b>' + e(v.number) + '</b><br><span class="muted" style="font-size:.76rem">' + e(v.reference || '') + '</span></td>' +
+          '<td><a href="#" data-open-tenant="' + e(v.tenant_id) + '">' + e(v.tenant_name) + '</a></td><td>' + e(v.plan_label) + ' / ' + (v.period === 'jahr' ? 'Jahr' : 'Monat') + '</td>' +
+          '<td class="num">' + e(LV.euro(v.amount_cents)) + '</td><td>' + stl + (v.status === 'paid' && v.paid_dmy ? '<br><span class="muted" style="font-size:.76rem">' + e(v.paid_dmy) + '</span>' : '') + '</td>' +
+          '<td>' + e(v.issued_dmy) + '</td><td>' + e(v.due_dmy) + '</td><td>' + acts + '</td></tr>';
+      }).join('') : '<tr><td colspan="8" class="muted">Keine Rechnungen.</td></tr>';
+      $('iBody').querySelectorAll('[data-act]').forEach(function (b) {
+        b.addEventListener('click', function () { invoiceAction(b.getAttribute('data-act'), b.getAttribute('data-id'), b.getAttribute('data-link'), loadInvoices); });
+      });
+      $('iBody').querySelectorAll('[data-open-tenant]').forEach(function (a) {
+        a.addEventListener('click', function (ev) { ev.preventDefault(); openTenant(a.getAttribute('data-open-tenant')); });
+      });
+    });
+  }
+  $('iFilter').addEventListener('change', loadInvoices);
+  $('iReload').addEventListener('click', loadInvoices);
+
+  // ---------- Anfragen ----------
+  function loadLeads() {
+    $('leads').innerHTML = '<p class="muted">Lade …</p>';
+    call('list_leads').then(function (r) {
+      if (!(r.data && r.data.ok)) { $('leads').innerHTML = '<p class="muted">Fehler: ' + e(LV.errText(r)) + '</p>'; return; }
+      var rows = r.data.leads || [];
+      $('lCount').textContent = rows.length + ' Anfrage' + (rows.length === 1 ? '' : 'n');
+      $('leads').innerHTML = rows.length ? rows.map(function (l) {
+        return '<div class="lead"><div class="h"><span><b>' + e(l.firma || '–') + '</b>' + (l.name ? ' · ' + e(l.name) : '') + ' · <a href="mailto:' + e(l.email) + '">' + e(l.email) + '</a></span><span class="muted">' + e(l.created_dmy) + '</span></div><p class="m">' + e(l.nachricht) + '</p></div>';
+      }).join('') : '<p class="muted">Keine Anfragen.</p>';
+    });
+  }
+  $('lReload').addEventListener('click', loadLeads);
+
+  // ---------- Statistik ----------
+  function loadStats() {
+    $('stats').innerHTML = '<p class="muted">Lade …</p>';
+    call('stats').then(function (r) {
+      if (!(r.data && r.data.ok)) { $('stats').innerHTML = '<p class="muted">Fehler: ' + e(LV.errText(r)) + '</p>'; return; }
+      var s = r.data.stats || {};
+      var list = [['Mandanten', s.tenants], ['davon bezahlte Tarife', s.paying], ['Nutzer', s.members], ['Artikel', s.items], ['Buchungen', s.movements], ['Offene Rechnungen', s.open_invoices], ['Umsatz (bezahlt)', LV.euro(s.paid_cents)], ['Anfragen', s.leads]];
+      $('stats').innerHTML = list.map(function (x) { return '<div class="stat"><div class="n">' + e(x[1] == null ? 0 : x[1]) + '</div><div class="l">' + e(x[0]) + '</div></div>'; }).join('');
+    });
+  }
+})();
+</script>
+</body>
+</html>

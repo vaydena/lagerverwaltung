@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Lager – Vaydena Lager</title>
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#0b1a24">
+<meta name="color-scheme" content="light">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Lager">
+<meta name="application-name" content="Vaydena Lager">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/icons/favicon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+<link rel="stylesheet" href="assets/app.css">
+<link rel="stylesheet" href="assets/lager.css">
+</head>
+<body class="app">
+<header class="topbar">
+  <a class="brand" href="app.html#scan" aria-label="Vaydena Lager – Startseite der App"><svg class="logo" viewBox="0 0 40 40" aria-hidden="true"><path d="M38 20 29 35.6H11L2 20 11 4.4h18z" fill="#0e6f6b"/><circle cx="20" cy="20" r="8" fill="#0b1a24"/><path d="M38 20 29 35.6H11L2 20 11 4.4h18z" fill="none" stroke="#e0a423" stroke-width="2.4"/></svg><span>Vaydena<small>Lager</small></span></a>
+  <span class="ttl" id="title">Lager</span>
+  <div class="spacer"></div>
+  <button class="syncdot" id="syncdot" type="button" data-act="go-konto" title="Abgleich-Status – tippen für Details"><i></i><span>…</span></button>
+</header>
+<div class="shell">
+  <nav class="sidenav" id="sidenav" aria-label="Hauptnavigation"></nav>
+  <main class="main">
+    <div class="inner">
+      <div class="banners" id="banners"></div>
+      <div id="view"><div class="splash"><div class="box"><div class="spinner"></div><p>Lade …</p></div></div></div>
+    </div>
+  </main>
+</div>
+<nav class="bottomnav" id="bottomnav" aria-label="Navigation"></nav>
+<div class="moresheet" id="moresheet"></div>
+<div id="modal" hidden></div>
+<div id="overlay"></div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<noscript><div class="splash"><div class="box"><p>Für Vaydena Lager muss JavaScript aktiviert sein.</p></div></div></noscript>
+<script src="assets/supabase.js"></script>
+<script src="assets/auth.js"></script>
+<script src="assets/html5-qrcode.min.js"></script>
+<script src="assets/qrcode-generator.js"></script>
+<script src="assets/JsBarcode.all.min.js"></script>
+<script src="assets/lager-store.js"></script>
+<script src="assets/lager-sync.js"></script>
+<script src="assets/lager-scan.js"></script>
+<script src="assets/lager-labels.js"></script>
+<script src="assets/lager-app.js"></script>
+<script>
+(function () {
+  if (!("serviceWorker" in navigator)) return;
+  if (location.protocol !== "https:" && location.hostname !== "localhost" && location.hostname !== "127.0.0.1") return;
+  window.addEventListener("load", function () {
+    navigator.serviceWorker.register("sw.js").then(function (reg) {
+      reg.addEventListener("updatefound", function () {
+        var w = reg.installing; if (!w) return;
+        w.addEventListener("statechange", function () {
+          if (w.state === "installed" && navigator.serviceWorker.controller && window.LVApp) LVApp.toast("Neue Version geladen – beim nächsten Start aktiv.", "ok", 4500);
+        });
+      });
+    }).catch(function () {});
+  });
+})();
+</script>
+</body>
+</html>
