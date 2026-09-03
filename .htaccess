@@ -3,13 +3,15 @@ AddType application/manifest+json .webmanifest
 AddType application/javascript .js
 AddDefaultCharset UTF-8
 <IfModule mod_headers.c>
-  <FilesMatch "^(sw\.js|manifest\.webmanifest|deploy-version\.txt)$">
-    Header set Cache-Control "no-cache, must-revalidate"
+  # Reihenfolge wichtig: bei mehreren Treffern gewinnt die letzte Regel.
+  <FilesMatch "\.(css|js|png|svg|woff2?)$">
+    Header set Cache-Control "public, max-age=86400"
   </FilesMatch>
   <FilesMatch "\.html$">
     Header set Cache-Control "no-cache"
   </FilesMatch>
-  <FilesMatch "\.(css|js|png|svg|woff2?)$">
-    Header set Cache-Control "public, max-age=86400"
+  # Service Worker, Manifest und Deploy-Marker immer frisch holen (schlaegt die .js-Regel oben)
+  <FilesMatch "^(sw\.js|manifest\.webmanifest|deploy-version\.txt)$">
+    Header set Cache-Control "no-cache, must-revalidate"
   </FilesMatch>
 </IfModule>
