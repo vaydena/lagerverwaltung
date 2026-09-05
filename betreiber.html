@@ -2,173 +2,399 @@
 <html lang="de">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Betreiber – Vaydena Lager</title>
-<meta name="robots" content="noindex,nofollow">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#0b1a24">
+<title>Betreiber · Vaydena Lager</title>
 <link rel="icon" href="assets/icons/favicon-32.png" sizes="32x32">
-<link rel="stylesheet" href="assets/app.css">
 <style>
-  .top{position:sticky;top:0;z-index:40;background:var(--navy);color:#fff;padding:10px 0;box-shadow:var(--shadow-s)}
-  .top .wrap{display:flex;align-items:center;gap:14px}
-  .top .brand{color:#fff;display:inline-flex;align-items:center;gap:10px;font-weight:800}
-  .top .brand small{color:var(--gold);font-weight:700;margin-left:4px}
-  .top .spacer{flex:1}
-  .top .who{font-size:.85rem;color:var(--navy-muted)}
-  .admin{max-width:var(--maxw);margin:0 auto;padding:22px 22px 70px}
-  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 22px}
-  .tabs button{font:inherit;font-weight:700;font-size:.92rem;padding:9px 16px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink-2);cursor:pointer}
-  .tabs button.on{background:var(--primary);color:#fff;border-color:var(--primary)}
-  .panel{display:none}.panel.on{display:block}
-  .bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
-  .bar input,.bar select{font:inherit;padding:9px 12px;border:1.5px solid var(--line);border-radius:10px;background:#fff;min-width:200px}
-  .bar .cnt{color:var(--muted);font-size:.88rem}
-  .tscroll{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow-s)}
-  table.a{width:100%;border-collapse:collapse;font-size:.92rem;min-width:820px}
-  table.a th,table.a td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--line);vertical-align:middle;white-space:nowrap}
-  table.a th{font-size:.74rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);background:var(--bg-2)}
-  table.a tr:last-child td{border-bottom:0}
-  table.a tbody tr.click{cursor:pointer}
-  table.a tbody tr.click:hover{background:var(--primary-l)}
-  table.a td.num{text-align:right;font-variant-numeric:tabular-nums}
-  table.a td.wrap{white-space:normal;min-width:220px}
-  .st{display:inline-block;padding:3px 9px;border-radius:999px;font-size:.74rem;font-weight:800;white-space:nowrap}
-  .st.ok{background:var(--ok-l);color:#136b48}.st.warn{background:var(--gold-l);color:var(--gold-d)}.st.bad{background:#fdecec;color:#a32020}.st.off{background:#e8ecee;color:#5c6f77}.st.teal{background:var(--primary-l);color:var(--primary-d)}
+  :root{
+    --bg:#f4f7f8; --surface:#ffffff; --surface-2:#eaf1f2; --border:#dbe6e9;
+    --text:#0f2830; --muted:#5c7883; --brand:#0e6f6b; --brand-strong:#0a5350; --brand-ink:#ffffff;
+    --gold:#e0a423; --gold-d:#9c6a0d;
+    --ok:#1f7a4d; --ok-bg:#e4f4ea; --ok-bd:#bfe3cd;
+    --warn:#8a5510; --warn-bg:#fbeecd; --warn-bd:#f0d6a8;
+    --danger:#b3341f; --danger-bg:#fbe8e4; --danger-bd:#f0c4ba;
+    --shadow:0 1px 2px rgba(11,26,36,.06), 0 6px 20px rgba(11,26,36,.06);
+    --radius:14px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#0b1a24; --surface:#122b39; --surface-2:#16323f; --border:#264a54;
+      --text:#e6f1f3; --muted:#93b2bb; --brand:#37b6c2; --brand-strong:#5cc9d3; --brand-ink:#062229;
+      --gold:#e6b34a; --gold-d:#e6b34a;
+      --ok:#49c78c; --ok-bg:#123a2c; --ok-bd:#1e5641;
+      --warn:#e6b34a; --warn-bg:#3a2f14; --warn-bd:#5a4a1f;
+      --danger:#ef7d6b; --danger-bg:#3a1a15; --danger-bd:#5e2b23;
+      --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.28);
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:var(--bg); color:var(--text); min-height:100vh;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.5; -webkit-font-smoothing:antialiased;
+    padding:24px 16px 64px;
+  }
+  a{color:var(--brand)}
+  .wrap{max-width:940px;margin:0 auto}
+  .brand{display:flex;align-items:center;gap:12px;margin:8px 2px 22px}
+  .brand .mark{width:42px;height:42px;flex:0 0 auto;display:grid;place-items:center}
+  .brand .mark svg{width:42px;height:42px}
+  .brand h1{font-size:1.18rem;margin:0;letter-spacing:-.01em}
+  .brand h1 b{color:var(--gold);font-weight:800}
+  .brand p{margin:1px 0 0;color:var(--muted);font-size:.86rem}
+
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
+  .pad{padding:22px}
+
+  /* ---- Buttons ---- */
+  .btn{appearance:none;border:1px solid transparent;border-radius:10px;padding:11px 16px;
+    font-size:.92rem;font-weight:600;font-family:inherit;cursor:pointer;transition:transform .06s, filter .15s}
+  .btn:active{transform:scale(.98)}
+  .btn[disabled]{opacity:.55;cursor:not-allowed}
+  .btn-primary{background:var(--brand);color:var(--brand-ink)}
+  .btn-primary:hover{filter:brightness(1.06)}
+  .btn-ghost{background:var(--surface-2);color:var(--text);border-color:var(--border)}
+  .btn-ghost:hover{filter:brightness(.98)}
+  .btn-ok{background:var(--ok);color:#fff}
+  .btn-danger{background:transparent;color:var(--danger);border-color:var(--danger-bd)}
+  .btn-danger:hover{background:var(--danger-bg)}
+  .btn-danger-solid{background:var(--danger);color:#fff}
+  .btn-sm{padding:7px 13px;font-size:.85rem}
+  .btn-xs{padding:5px 10px;font-size:.78rem;border-radius:8px}
+  .btn-block{width:100%}
+
+  /* ---- Form fields ---- */
+  label.fld{display:block;font-size:.82rem;font-weight:600;color:var(--muted);margin:0 0 6px}
+  input[type=password],input[type=text],input[type=search],input[type=number],textarea,select,input.search{
+    width:100%;padding:11px 12px;border:1px solid var(--border);border-radius:10px;
+    background:var(--surface-2);color:var(--text);font-size:.95rem;font-family:inherit}
+  textarea{line-height:1.45;resize:vertical;min-height:80px}
+  input:focus,textarea:focus,select:focus{outline:2px solid var(--brand);outline-offset:1px;border-color:var(--brand)}
+  .msg{margin-top:12px;font-size:.86rem;font-weight:600;display:none}
+  .msg.err{display:block;color:var(--danger)}
+  .msg.ok{display:block;color:var(--ok)}
+  .muted{color:var(--muted)}
+  .mono{font-family:ui-monospace,Consolas,monospace;font-size:.82rem;word-break:break-all}
+
+  /* ---- Login ---- */
+  #login{max-width:440px;margin:6vh auto 0}
+  #login h2{margin:0 0 4px;font-size:1.05rem}
+  #login p.sub{margin:0 0 18px;color:var(--muted);font-size:.9rem}
+  .remember{display:flex;align-items:center;gap:8px;margin:14px 0 18px;color:var(--muted);font-size:.86rem}
+  .remember input{width:16px;height:16px;accent-color:var(--brand)}
+
+  /* ---- App / Toolbar ---- */
+  #app{display:none}
+  .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 2px 16px}
+  .toolbar .views{display:flex;gap:6px;flex-wrap:wrap}
+  .toolbar .spacer{flex:1}
+
+  .bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:0 2px 14px}
+  .bar .search{flex:1 1 220px;min-width:0}
+  .bar select{min-width:200px;flex:0 0 auto}
+  .bar .cnt{color:var(--muted);font-size:.86rem}
+  .summary{display:flex;gap:16px;flex-wrap:wrap;margin:0 2px 16px;color:var(--muted);font-size:.86rem}
+  .summary b{color:var(--text)}
+
+  /* ---- Tables ---- */
+  .tablewrap{overflow-x:auto;border-radius:var(--radius)}
+  table{width:100%;border-collapse:collapse;min-width:720px}
+  thead th{font-size:.74rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);
+    text-align:left;font-weight:700;padding:12px 14px;border-bottom:1px solid var(--border);white-space:nowrap}
+  thead th.num,tbody td.num{text-align:right;font-variant-numeric:tabular-nums}
+  tbody td{padding:13px 14px;border-bottom:1px solid var(--border);vertical-align:middle}
+  tbody tr:last-child td{border-bottom:none}
+  tbody tr.click{cursor:pointer}
+  tbody tr.click:hover td{background:var(--surface-2)}
+  .pname{font-weight:600}
+  .pmeta{color:var(--muted);font-size:.78rem;margin-top:2px}
+  td.act{text-align:right;white-space:nowrap}
+  td.act .btn{margin-left:8px}
+
+  /* ---- Pills ---- */
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:.78rem;font-weight:700;
+    padding:4px 10px;border-radius:999px;border:1px solid;white-space:nowrap}
+  .pill::before{content:"";width:7px;height:7px;border-radius:50%}
+  .pill.on{color:var(--ok);background:var(--ok-bg);border-color:var(--ok-bd)}
+  .pill.on::before{background:var(--ok)}
+  .pill.off{color:var(--danger);background:var(--danger-bg);border-color:var(--danger-bd)}
+  .pill.off::before{background:var(--danger)}
+  .pill.warn{color:var(--warn);background:var(--warn-bg);border-color:var(--warn-bd)}
+  .pill.warn::before{background:var(--gold)}
+  .pill.trial{color:var(--warn);background:var(--warn-bg);border-color:var(--warn-bd)}
+  .pill.trial::before{background:var(--gold)}
+  .pill.paid{color:var(--ok);background:var(--ok-bg);border-color:var(--ok-bd)}
+  .pill.paid::before{background:var(--ok)}
+  .pill.open{color:var(--danger);background:var(--danger-bg);border-color:var(--danger-bd)}
+  .pill.open::before{background:var(--danger)}
+  .pill.canceled{color:var(--muted);background:var(--surface-2);border-color:var(--border)}
+  .pill.canceled::before{background:var(--muted)}
+  .pill.new{color:var(--brand);background:var(--surface-2);border-color:var(--border)}
+  .pill.new::before{background:var(--brand)}
+  button.pill{cursor:pointer;font:inherit}
+  button.pill:hover{filter:brightness(.97)}
+  button.pill:disabled{cursor:default}
+
+  /* ---- Stats / Leads ---- */
   .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px}
-  .stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;box-shadow:var(--shadow-s)}
-  .stat .n{font-size:1.9rem;font-weight:800;letter-spacing:-.02em;color:var(--primary-d)}
-  .stat .l{font-size:.78rem;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.06em}
-  .drawer{position:fixed;inset:0;background:rgba(11,26,36,.45);display:none;z-index:60}
-  .drawer.on{display:block}
-  .drawer .panelbox{position:absolute;top:0;right:0;bottom:0;width:min(760px,100%);background:var(--bg);overflow-y:auto;padding:22px;box-shadow:var(--shadow-l)}
-  .dhead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px;position:sticky;top:-22px;background:var(--bg);padding:6px 0;z-index:1}
-  .dhead h2{font-size:1.35rem;margin:0}
-  .x{background:var(--surface);border:1px solid var(--line);border-radius:10px;width:38px;height:38px;font-size:1.3rem;cursor:pointer;flex:0 0 auto}
-  .box{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px;margin-bottom:14px;box-shadow:var(--shadow-s)}
-  .box h3{font-size:1rem;margin-bottom:12px}
-  .kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:.92rem}
+  .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;box-shadow:var(--shadow)}
+  .stat .n{font-size:1.9rem;font-weight:800;letter-spacing:-.02em;color:var(--brand-strong)}
+  .stat .l{font-size:.78rem;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.05em;margin-top:2px}
+  .lead{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;margin-bottom:12px;box-shadow:var(--shadow)}
+  .lead .h{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:.92rem}
+  .lead .m{white-space:pre-wrap;margin:8px 0 0;font-size:.95rem;color:var(--text)}
+
+  .empty{padding:40px 20px;text-align:center;color:var(--muted)}
+  .note{margin:18px 2px 0;color:var(--muted);font-size:.8rem}
+
+  /* ---- Toast ---- */
+  #toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);
+    background:var(--text);color:var(--bg);padding:11px 18px;border-radius:10px;font-size:.9rem;font-weight:600;
+    box-shadow:0 8px 30px rgba(0,0,0,.25);opacity:0;pointer-events:none;transition:opacity .2s, transform .2s;max-width:90vw;text-align:center;z-index:90}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  #toast.ok{background:var(--ok);color:#fff}
+  #toast.err{background:var(--danger);color:#fff}
+  .spin{display:inline-block;width:15px;height:15px;border:2px solid currentColor;border-right-color:transparent;
+    border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px;margin-right:7px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion: reduce){.spin{animation:none}}
+
+  /* ---- Modals ---- */
+  .modal-back{position:fixed;inset:0;background:rgba(4,20,22,.55);display:none;align-items:flex-start;
+    justify-content:center;padding:22px 14px;overflow:auto;z-index:60}
+  .modal-back.show{display:flex}
+  .modal{max-width:680px;width:100%;margin:18px auto 40px}
+  .modal.narrow{max-width:640px}
+  .modal-h{display:flex;align-items:center;justify-content:space-between;gap:12px;
+    padding:16px 22px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);
+    border-radius:var(--radius) var(--radius) 0 0;z-index:1}
+  .modal-h h2{margin:0;font-size:1.02rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .modal-h .x{background:none;border:none;color:var(--muted);font-size:1.05rem;cursor:pointer;padding:4px 9px;border-radius:8px;flex:0 0 auto}
+  .modal-h .x:hover{background:var(--surface-2);color:var(--text)}
+  .modal-b{padding:18px 22px}
+  .modal-f{display:flex;justify-content:space-between;gap:10px;padding:15px 22px;border-top:1px solid var(--border);
+    position:sticky;bottom:0;background:var(--surface);border-radius:0 0 var(--radius) var(--radius)}
+
+  /* ---- Tenant detail boxes ---- */
+  .box{background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:14px}
+  .box:last-child{margin-bottom:0}
+  .box h3{font-size:.95rem;margin:0 0 12px}
+  .box.danger{border-color:var(--danger-bd);background:var(--danger-bg)}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:.9rem}
   .kv .k{color:var(--muted);font-weight:700}
   .row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
-  .row .field{margin:0;flex:1 1 140px}
-  .field textarea{min-height:80px;resize:vertical}
-  .box.danger{border-color:#f3c9c9}
-  .btn.danger{background:#c62828;color:#fff}
-  .btn.xs{padding:5px 10px;font-size:.78rem;border-radius:8px}
-  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--navy);color:#fff;padding:12px 18px;border-radius:12px;font-weight:700;box-shadow:var(--shadow-l);opacity:0;pointer-events:none;transition:opacity .2s;z-index:80;max-width:90vw;text-align:center}
-  .toast.on{opacity:1}
-  .toast.err{background:#a32020}
-  .lead{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;margin-bottom:12px;box-shadow:var(--shadow-s)}
-  .lead .h{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:.92rem}
-  .lead .m{white-space:pre-wrap;margin:8px 0 0;font-size:.95rem;color:var(--ink-2)}
-  .mono{font-family:ui-monospace,Consolas,monospace;font-size:.82rem;word-break:break-all}
-  .login{max-width:460px;margin:60px auto;padding:0 22px}
+  .row .f{flex:1 1 140px;min-width:0}
+  .row .f label.fld{margin-bottom:4px}
+  .subtable{overflow-x:auto}
+  .subtable table{min-width:520px}
+
+  /* ---- Posteingang ---- */
+  .mailrow{cursor:pointer}
+  .mailrow:hover td{background:var(--surface-2)}
+  .mailrow.unseen .mfrom,.mailrow.unseen .msubj{font-weight:700}
+  .mfrom{font-weight:600}
+  .mailhead{background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:.86rem;margin-bottom:14px}
+  .mailhead div{display:flex;gap:8px;min-width:0}
+  .mailhead b{flex:0 0 58px;color:var(--muted);font-weight:600}
+  .mailhead span{min-width:0;overflow-wrap:anywhere}
+  .attrow{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px}
+  .attchip{display:inline-flex;align-items:center;gap:7px;padding:7px 12px;border:1px solid var(--border);
+    border-radius:999px;background:var(--surface-2);color:var(--text);font:inherit;font-size:.82rem;font-weight:600;cursor:pointer;max-width:100%}
+  .attchip:hover{border-color:var(--brand);color:var(--brand)}
+  .attchip .asize{color:var(--muted);font-weight:400}
+  .mailbody-pre{white-space:pre-wrap;font-family:inherit;font-size:.92rem;line-height:1.55;margin:0;overflow-wrap:anywhere;max-height:56vh;overflow:auto}
+  .mailframe{width:100%;height:56vh;border:1px solid var(--border);border-radius:10px;background:#fff}
+  td.mailact{text-align:right;white-space:nowrap;width:1%}
+  .mail-del{padding:6px 10px;font-size:.95rem;line-height:1;background:transparent;border-color:var(--border);color:var(--muted)}
+  .mail-del:hover{color:var(--danger);border-color:var(--danger-bd);background:var(--danger-bg)}
 </style>
 </head>
 <body>
+<div class="wrap">
 
-<div class="top"><div class="wrap">
-  <a class="brand" href="index.html"><svg class="logo" viewBox="0 0 40 40" width="28" height="28" aria-hidden="true"><path d="M38 20 29 35.6H11L2 20 11 4.4h18z" fill="#0e6f6b"/><circle cx="20" cy="20" r="8" fill="#fff"/><path d="M38 20 29 35.6H11L2 20 11 4.4h18z" fill="none" stroke="#e0a423" stroke-width="2.4"/></svg>Vaydena Lager <small>Betreiber</small></a>
-  <div class="spacer"></div>
-  <span class="who hide" id="who">angemeldet</span>
-  <button class="btn ghost on-navy sm hide" type="button" id="btnLogout">Abmelden</button>
-</div></div>
-
-<!-- Login -->
-<div class="login" id="login">
-  <form class="authcard" id="loginForm" novalidate>
-    <h1 class="mt0" style="font-size:1.5rem">Betreiber-Zugang</h1>
-    <p class="muted">Bitte den Betreiberschlüssel eingeben. Er wird nur für diese Browser-Sitzung gespeichert.</p>
-    <div id="loginMsg" class="msg" role="alert"></div>
-    <div class="field"><label for="akey">Betreiberschlüssel</label><input id="akey" type="password" autocomplete="current-password" required></div>
-    <button class="btn primary block" type="submit" id="btnKey">Anmelden</button>
-  </form>
-</div>
-
-<!-- App -->
-<main class="admin hide" id="app">
-  <div class="tabs" role="tablist">
-    <button type="button" data-tab="tenants" class="on">Mandanten</button>
-    <button type="button" data-tab="invoices">Rechnungen</button>
-    <button type="button" data-tab="leads">Anfragen</button>
-    <button type="button" data-tab="stats">Statistik</button>
+  <div class="brand">
+    <span class="mark" aria-hidden="true">
+      <svg viewBox="0 0 40 40" width="42" height="42"><path d="M38 20 29 35.6H11L2 20 11 4.4h18z" fill="#0e6f6b"/><circle cx="20" cy="20" r="8" fill="#fff"/><path d="M38 20 29 35.6H11L2 20 11 4.4h18z" fill="none" stroke="#e0a423" stroke-width="2.4"/></svg>
+    </span>
+    <div>
+      <h1>Vaydena&nbsp;Lager <b>Betreiber</b></h1>
+      <p>Mandanten &amp; Tarife, Rechnungen, Anfragen, Posteingang</p>
+    </div>
   </div>
 
-  <section class="panel on" id="panel-tenants">
-    <div class="bar">
-      <input id="tSearch" type="search" placeholder="Suche Firma / E-Mail …">
-      <select id="tFilter">
-        <option value="">Alle</option>
-        <option value="active">Aktiv nutzbar</option>
-        <option value="inactive">Nicht nutzbar (abgelaufen/gesperrt)</option>
-        <option value="trial">Testphase</option>
-        <option value="paying">Bezahlte Tarife</option>
-        <option value="open">Mit offenen Rechnungen</option>
-      </select>
-      <span class="cnt" id="tCount"></span>
-      <span class="spacer" style="flex:1"></span>
-      <button class="btn ghost sm" type="button" id="tReload">Neu laden</button>
+  <!-- ================= LOGIN ================= -->
+  <div id="login" class="card pad">
+    <h2>Betreiber-Zugang</h2>
+    <p class="sub">Bitte den Betreiberschlüssel eingeben. Er wird nur zur Anmeldung an den Server geschickt und nirgends im Klartext gespeichert.</p>
+    <form id="loginForm" autocomplete="off" novalidate>
+      <label class="fld" for="akey">Betreiberschlüssel</label>
+      <input id="akey" type="password" placeholder="••••••••••••••••" autocomplete="current-password" spellcheck="false">
+      <div class="remember">
+        <input id="remember" type="checkbox"><label for="remember" style="margin:0;font-weight:500">Auf diesem Gerät merken</label>
+      </div>
+      <button class="btn btn-primary btn-block" id="loginBtn" type="submit">Anmelden</button>
+      <div id="loginMsg" class="msg" role="alert"></div>
+    </form>
+  </div>
+
+  <!-- ================= APP ================= -->
+  <div id="app">
+    <div class="toolbar">
+      <div class="views">
+        <button class="btn btn-primary btn-sm" type="button" data-view="tenants">Mandanten</button>
+        <button class="btn btn-ghost btn-sm" type="button" data-view="invoices">Rechnungen</button>
+        <button class="btn btn-ghost btn-sm" type="button" data-view="leads">Anfragen</button>
+        <button class="btn btn-ghost btn-sm" type="button" data-view="stats">Statistik</button>
+        <button class="btn btn-ghost btn-sm" type="button" data-view="mail">Posteingang</button>
+      </div>
+      <div class="spacer"></div>
+      <button class="btn btn-ghost btn-sm" type="button" id="refreshBtn">Aktualisieren</button>
+      <button class="btn btn-ghost btn-sm" type="button" id="exportBtn" title="Mandanten, Rechnungen &amp; Anfragen als JSON-Backup herunterladen">Export</button>
+      <button class="btn btn-ghost btn-sm" type="button" id="logoutBtn">Abmelden</button>
     </div>
-    <div class="tscroll"><table class="a">
-      <thead><tr><th>Firma</th><th>Tarif</th><th>Abo</th><th>Bis</th><th class="num">Nutzer</th><th class="num">Artikel</th><th class="num">Offen</th><th>Angelegt</th></tr></thead>
-      <tbody id="tBody"><tr><td colspan="8" class="muted">Lade …</td></tr></tbody>
-    </table></div>
-  </section>
 
-  <section class="panel" id="panel-invoices">
-    <div class="bar">
-      <select id="iFilter">
-        <option value="open">Offen</option>
-        <option value="paid">Bezahlt</option>
-        <option value="void">Storniert</option>
-        <option value="">Alle</option>
-      </select>
-      <span class="cnt" id="iCount"></span>
-      <span class="spacer" style="flex:1"></span>
-      <button class="btn ghost sm" type="button" id="iReload">Neu laden</button>
+    <!-- Mandanten -->
+    <section id="view-tenants">
+      <div class="bar">
+        <input class="search" id="tSearch" type="search" placeholder="Suche Firma / E-Mail …" autocomplete="off">
+        <select id="tFilter">
+          <option value="">Alle</option>
+          <option value="active">Aktiv nutzbar</option>
+          <option value="inactive">Nicht nutzbar (abgelaufen/gesperrt)</option>
+          <option value="trial">Testphase</option>
+          <option value="paying">Bezahlte Tarife</option>
+          <option value="open">Mit offenen Rechnungen</option>
+        </select>
+        <span class="cnt" id="tCount"></span>
+      </div>
+      <div class="card">
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Firma</th><th>Tarif</th><th>Abo</th><th>Bis</th><th class="num">Nutzer</th><th class="num">Artikel</th><th class="num">Offen</th><th>Angelegt</th></tr></thead>
+            <tbody id="tRows"><tr><td colspan="8" class="muted">Lade …</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+      <p class="note">Auf eine Zeile klicken öffnet die Mandanten-Verwaltung (Tarif, Zugang, Rechnungen, Nutzer). „Offen“ = offene Rechnungen.</p>
+    </section>
+
+    <!-- Rechnungen -->
+    <section id="view-invoices" hidden>
+      <div class="bar">
+        <select id="iFilter">
+          <option value="open">Offen</option>
+          <option value="paid">Bezahlt</option>
+          <option value="void">Storniert</option>
+          <option value="">Alle</option>
+        </select>
+        <span class="cnt" id="iCount"></span>
+      </div>
+      <div class="card">
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Nr.</th><th>Firma</th><th>Tarif</th><th class="num">Betrag</th><th>Status</th><th>Ausgestellt</th><th>Fällig</th><th style="text-align:right">Aktion</th></tr></thead>
+            <tbody id="iRows"><tr><td colspan="8" class="muted">Lade …</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+      <p class="note">Zahlungseingang prüfen (Verwendungszweck = Rechnungsnummer), dann „Bezahlt“: Der Tarif wird sofort um die Laufzeit verlängert und der Kunde erhält eine Bestätigung. „Link“ kopiert die Zahlseite.</p>
+    </section>
+
+    <!-- Anfragen -->
+    <section id="view-leads" hidden>
+      <div class="bar"><span class="cnt" id="lCount"></span></div>
+      <div id="leads"><p class="muted">Lade …</p></div>
+    </section>
+
+    <!-- Statistik -->
+    <section id="view-stats" hidden>
+      <div class="cards" id="stats"></div>
+    </section>
+
+    <!-- Posteingang -->
+    <section id="view-mail" hidden>
+      <div class="summary" id="mailSummary"></div>
+      <div class="card">
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Von</th><th>Betreff</th><th class="num">Datum</th><th></th></tr></thead>
+            <tbody id="mailRows"></tbody>
+          </table>
+        </div>
+        <div class="empty" id="mailLoading" hidden><span class="spin"></span>Postfach wird geladen…</div>
+        <div class="empty" id="mailEmpty" hidden>Der Posteingang ist leer.</div>
+        <div class="empty" id="mailError" hidden></div>
+      </div>
+      <p class="note">Zeigt die neuesten 50 E-Mails aus dem gemeinsamen Kontakt-Postfach (kontakt@vaydena.de). Öffnen markiert die E-Mail auch im Postfach als gelesen. Das Papierkorb-Symbol entfernt sie aus dem Posteingang – hat das Postfach einen Papierkorb, landet sie dort und lässt sich im Webmail wiederherstellen.</p>
+    </section>
+  </div>
+
+</div>
+
+<!-- ================= MANDANTEN-MODAL ================= -->
+<div id="tmBack" class="modal-back" role="dialog" aria-modal="true" aria-labelledby="tmTitle">
+  <div class="modal card">
+    <div class="modal-h">
+      <h2 id="tmTitle">Mandant</h2>
+      <button class="x" id="tmClose" type="button" aria-label="Schließen">✕</button>
     </div>
-    <div class="tscroll"><table class="a">
-      <thead><tr><th>Nr.</th><th>Firma</th><th>Tarif</th><th class="num">Betrag</th><th>Status</th><th>Ausgestellt</th><th>Fällig</th><th>Aktionen</th></tr></thead>
-      <tbody id="iBody"><tr><td colspan="8" class="muted">Lade …</td></tr></tbody>
-    </table></div>
-    <p class="formnote">Zahlungseingang auf dem Konto prüfen (Verwendungszweck = Rechnungsnummer), dann „Bezahlt“ klicken: Der Tarif wird sofort um die Laufzeit verlängert und der Kunde bekommt eine Bestätigung.</p>
-  </section>
-
-  <section class="panel" id="panel-leads">
-    <div class="bar"><span class="cnt" id="lCount"></span><span class="spacer" style="flex:1"></span><button class="btn ghost sm" type="button" id="lReload">Neu laden</button></div>
-    <div id="leads"><p class="muted">Lade …</p></div>
-  </section>
-
-  <section class="panel" id="panel-stats">
-    <div class="cards" id="stats"></div>
-  </section>
-</main>
-
-<!-- Drawer -->
-<div class="drawer" id="drawer" aria-hidden="true">
-  <div class="panelbox" role="dialog" aria-modal="true" aria-labelledby="dTitle">
-    <div class="dhead"><h2 id="dTitle">Mandant</h2><button class="x" type="button" id="dClose" aria-label="Schließen">×</button></div>
-    <div id="dBody"></div>
+    <div class="modal-b" id="tmBody"></div>
   </div>
 </div>
 
-<div class="toast" id="toast" role="status"></div>
+<!-- ================= MAIL-MODAL ================= -->
+<div id="mailBack" class="modal-back" role="dialog" aria-modal="true" aria-labelledby="mailTitle">
+  <div class="modal narrow card" style="max-width:760px">
+    <div class="modal-h">
+      <h2 id="mailTitle">E-Mail</h2>
+      <button class="x" id="mailClose" type="button" aria-label="Schließen">✕</button>
+    </div>
+    <div class="modal-b">
+      <div class="mailhead" id="mailMeta"></div>
+      <div class="attrow" id="mailAtt" hidden></div>
+      <div id="mailContent"><div class="empty"><span class="spin"></span>E-Mail wird geladen…</div></div>
+      <div style="margin-top:12px">
+        <button class="btn btn-ghost btn-sm" id="mailImgBtn" type="button" hidden>Externe Bilder laden</button>
+      </div>
+    </div>
+    <div class="modal-f">
+      <button class="btn btn-danger" id="mailDelBtn" type="button">Löschen</button>
+      <button class="btn btn-ghost" id="mailCloseBtn" type="button">Schließen</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" role="status" aria-live="polite"></div>
 
 <script src="assets/auth.js"></script>
 <script>
 (function () {
+  "use strict";
   var $ = function (id) { return document.getElementById(id); };
   var e = LV.esc;
   var KEY = 'lv_admin_key';
-  var key = '';
-  try { key = sessionStorage.getItem(KEY) || ''; } catch (err) { key = ''; }
   var PLANS = { trial: 'Test', starter: 'Starter', team: 'Team', business: 'Business' };
-  var toastTimer = null;
 
+  var key = '';
+  try { key = sessionStorage.getItem(KEY) || localStorage.getItem(KEY) || ''; } catch (err) { key = ''; }
+
+  function setKey(v, persist) {
+    try { sessionStorage.setItem(KEY, v); if (persist) { localStorage.setItem(KEY, v); } else { localStorage.removeItem(KEY); } } catch (err) {}
+  }
+  function clearKey() { try { sessionStorage.removeItem(KEY); localStorage.removeItem(KEY); } catch (err) {} }
+
+  // ---------- Toast ----------
+  var toastTimer = null;
   function toast(text, isErr) {
-    var t = $('toast'); t.textContent = text; t.className = 'toast on' + (isErr ? ' err' : '');
-    clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.className = 'toast'; }, isErr ? 5000 : 3000);
+    var t = $('toast'); t.textContent = text; t.className = 'show' + (isErr ? ' err' : ' ok');
+    clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.className = ''; }, isErr ? 5000 : 2800);
   }
   function showMsg(el, kind, text) { el.className = 'msg ' + kind; el.textContent = text; }
+
+  // ---------- Clipboard ----------
   function fallbackCopy(t) {
     try { var ta = document.createElement('textarea'); ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); var ok = document.execCommand('copy'); document.body.removeChild(ta); return ok; } catch (err) { return false; }
   }
@@ -177,74 +403,141 @@
     return Promise.resolve(fallbackCopy(t));
   }
 
+  // ---------- API ----------
   function call(action, payload) {
     return LV.adminCall(key, action, payload).then(function (r) {
       if (r.status === 401) { logout('Der Schlüssel ist ungültig. Bitte erneut anmelden.'); return { status: 401, data: { error: 'unauthorized' } }; }
       return r;
     });
   }
-  function logout(msgText) {
-    try { sessionStorage.removeItem(KEY); } catch (err) {}
-    key = '';
-    $('app').classList.add('hide'); $('btnLogout').classList.add('hide'); $('who').classList.add('hide');
-    $('login').classList.remove('hide');
-    closeDrawer();
-    if (msgText) showMsg($('loginMsg'), 'err', msgText);
-  }
-  function start() {
-    $('login').classList.add('hide');
-    $('app').classList.remove('hide'); $('btnLogout').classList.remove('hide'); $('who').classList.remove('hide');
-    openTab('tenants');
+  // Posteingang läuft über die eigene Funktion lager-mail (gleiche x-admin-key-Auth wie lager-admin).
+  function mailCall(action, payload) {
+    var body = Object.assign({ action: action }, payload || {});
+    return fetch(LV.FN + '/lager-mail', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': LV.SB_KEY, 'Authorization': 'Bearer ' + LV.SB_KEY, 'x-admin-key': key },
+      body: JSON.stringify(body)
+    }).then(function (r) {
+      return r.text().then(function (t) {
+        var d; try { d = t ? JSON.parse(t) : {}; } catch (err) { d = { error: 'bad_response' }; }
+        if (r.status === 401) { logout('Der Schlüssel ist ungültig. Bitte erneut anmelden.'); }
+        return { status: r.status, data: d };
+      });
+    }).catch(function () { return { status: 0, data: { error: 'offline' } }; });
   }
 
-  // ---------- Login ----------
+  // ---------- Login / Session ----------
+  function logout(msgText) {
+    clearKey(); key = '';
+    MAILS = []; mailLoaded = false;
+    $('app').style.display = 'none';
+    closeTenant(); hideMailModal();
+    $('login').style.display = '';
+    if (msgText) showMsg($('loginMsg'), 'err', msgText);
+    setTimeout(function () { try { $('akey').focus(); } catch (err) {} }, 50);
+  }
+  function start() {
+    $('login').style.display = 'none';
+    $('app').style.display = 'block';
+    switchView('tenants');
+  }
+
   $('loginForm').addEventListener('submit', function (ev) {
     ev.preventDefault();
-    var k = $('akey').value.trim();
+    var k = ($('akey').value || '').trim();
+    $('loginMsg').className = 'msg';
     if (k.length < 16) return showMsg($('loginMsg'), 'err', 'Bitte den vollständigen Schlüssel eingeben.');
-    $('btnKey').disabled = true; $('loginMsg').className = 'msg';
+    var btn = $('loginBtn'); btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Prüfe…';
     LV.adminCall(k, 'ping').then(function (r) {
-      $('btnKey').disabled = false;
+      btn.disabled = false; btn.innerHTML = 'Anmelden';
       if (r.data && r.data.ok) {
-        key = k; try { sessionStorage.setItem(KEY, k); } catch (err) {}
+        key = k; setKey(k, $('remember').checked);
         $('akey').value = ''; start();
       } else {
         showMsg($('loginMsg'), 'err', r.status === 401 ? 'Schlüssel falsch.' : LV.errText(r));
       }
     });
   });
-  $('btnLogout').addEventListener('click', function () { logout(); });
-  if (key) start();
+  $('logoutBtn').addEventListener('click', function () { logout(); });
 
-  // ---------- Tabs ----------
-  var loaders = { tenants: loadTenants, invoices: loadInvoices, leads: loadLeads, stats: loadStats };
-  function openTab(name) {
-    document.querySelectorAll('.tabs button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-tab') === name); });
-    document.querySelectorAll('.panel').forEach(function (p) { p.classList.toggle('on', p.id === 'panel-' + name); });
-    loaders[name]();
+  // ---------- Views ----------
+  var VIEW = 'tenants';
+  function showEl(el, on) { if (el) el.hidden = !on; }
+  function switchView(v) {
+    VIEW = v;
+    ['tenants', 'invoices', 'leads', 'stats', 'mail'].forEach(function (name) {
+      showEl($('view-' + name), name === v);
+    });
+    document.querySelectorAll('.views button').forEach(function (b) {
+      var on = b.getAttribute('data-view') === v;
+      b.className = 'btn btn-sm ' + (on ? 'btn-primary' : 'btn-ghost');
+    });
+    if (v === 'tenants') loadTenants();
+    else if (v === 'invoices') loadInvoices();
+    else if (v === 'leads') loadLeads();
+    else if (v === 'stats') loadStats();
+    else if (v === 'mail') { if (!mailLoaded) loadMails(); }
   }
-  document.querySelectorAll('.tabs button').forEach(function (b) { b.addEventListener('click', function () { openTab(b.getAttribute('data-tab')); }); });
+  document.querySelectorAll('.views button').forEach(function (b) {
+    b.addEventListener('click', function () { switchView(b.getAttribute('data-view')); });
+  });
+  $('refreshBtn').addEventListener('click', function () {
+    if (VIEW === 'mail') loadMails(); else switchView(VIEW);
+  });
+
+  // ---------- Export ----------
+  var busy = false;
+  function exportData() {
+    if (busy) return; busy = true;
+    var btn = $('exportBtn'); btn.disabled = true;
+    toast('Backup wird erstellt…');
+    Promise.all([call('list_tenants'), call('list_invoices', {}), call('list_leads'), call('stats')]).then(function (res) {
+      var t = res[0], iv = res[1], l = res[2], s = res[3];
+      if (!(t.data && t.data.ok)) { toast(LV.errText(t), true); return; }
+      var backup = {
+        product: 'vaydena-lager', exported_at: new Date().toISOString(),
+        counts: {
+          tenants: (t.data.tenants || []).length,
+          invoices: ((iv.data && iv.data.invoices) || []).length,
+          leads: ((l.data && l.data.leads) || []).length
+        },
+        tenants: t.data.tenants || [],
+        invoices: (iv.data && iv.data.invoices) || [],
+        leads: (l.data && l.data.leads) || [],
+        stats: (s.data && s.data.stats) || {}
+      };
+      var blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'vaydena-lager-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 5000);
+      toast('Backup gespeichert (' + backup.counts.tenants + ' Mandanten, ' + backup.counts.invoices + ' Rechnungen)');
+    }).catch(function () { toast('Export fehlgeschlagen.', true); }).then(function () { busy = false; btn.disabled = false; });
+  }
+  $('exportBtn').addEventListener('click', exportData);
 
   // ---------- Mandanten ----------
   var tenants = [];
   function subPill(t) {
     var s = t.sub || {};
     if (s.active) {
-      if (s.reason === 'grace') return '<span class="st warn">Kulanz</span>';
-      return '<span class="st ok">' + (t.plan === 'trial' ? 'Test' : 'Aktiv') + (s.days_left != null ? ' · ' + s.days_left + ' T.' : '') + '</span>';
+      if (s.reason === 'grace') return '<span class="pill warn">Kulanz' + (s.days_left != null ? ' · ' + s.days_left + ' T.' : '') + '</span>';
+      if (t.plan === 'trial') return '<span class="pill trial">Test' + (s.days_left != null ? ' · ' + s.days_left + ' T.' : '') + '</span>';
+      return '<span class="pill on">Aktiv' + (s.days_left != null ? ' · ' + s.days_left + ' T.' : '') + '</span>';
     }
     var m = { gesperrt: 'Gesperrt', trial_expired: 'Test abgelaufen', unpaid: 'Unbezahlt', expired: 'Abgelaufen' };
-    return '<span class="st bad">' + (m[s.reason] || 'Inaktiv') + '</span>';
+    return '<span class="pill off">' + (m[s.reason] || 'Inaktiv') + '</span>';
   }
   function loadTenants() {
-    $('tBody').innerHTML = '<tr><td colspan="8" class="muted">Lade …</td></tr>';
+    $('tRows').innerHTML = '<tr><td colspan="8" class="muted">Lade …</td></tr>';
     call('list_tenants').then(function (r) {
-      if (!(r.data && r.data.ok)) { $('tBody').innerHTML = '<tr><td colspan="8" class="muted">Fehler: ' + e(LV.errText(r)) + '</td></tr>'; return; }
+      if (!(r.data && r.data.ok)) { $('tRows').innerHTML = '<tr><td colspan="8" class="muted">Fehler: ' + e(LV.errText(r)) + '</td></tr>'; return; }
       tenants = r.data.tenants || []; renderTenants();
     });
   }
   function renderTenants() {
-    var q = $('tSearch').value.trim().toLowerCase(), f = $('tFilter').value;
+    var q = ($('tSearch').value || '').trim().toLowerCase(), f = $('tFilter').value;
     var rows = tenants.filter(function (t) {
       var hay = ((t.name || '') + ' ' + (t.contact_email || '') + ' ' + ((t.billing && t.billing.email) || '') + ' ' + (t.notiz || '')).toLowerCase();
       if (q && hay.indexOf(q) < 0) return false;
@@ -257,53 +550,52 @@
       return true;
     });
     $('tCount').textContent = rows.length + ' von ' + tenants.length;
-    $('tBody').innerHTML = rows.length ? rows.map(function (t) {
-      return '<tr class="click" data-id="' + e(t.id) + '"><td><b>' + e(t.name) + '</b><br><span class="muted" style="font-size:.8rem">' + e(t.contact_email || '') + '</span></td>' +
-        '<td>' + e(t.plan_label) + '</td><td>' + subPill(t) + (t.status === 'gesperrt' ? ' <span class="st off">gesperrt</span>' : '') + '</td>' +
+    $('tRows').innerHTML = rows.length ? rows.map(function (t) {
+      return '<tr class="click" data-id="' + e(t.id) + '"><td><div class="pname">' + e(t.name) + '</div><div class="pmeta">' + e(t.contact_email || '') + '</div></td>' +
+        '<td>' + e(t.plan_label) + '</td><td>' + subPill(t) + (t.status === 'gesperrt' ? ' <span class="pill off">gesperrt</span>' : '') + '</td>' +
         '<td>' + e(t.plan === 'trial' ? t.trial_ends_dmy : (t.paid_until_dmy || '–')) + '</td>' +
         '<td class="num">' + e(t.members) + '</td><td class="num">' + e(t.items) + '</td><td class="num">' + (t.open_invoices ? e(t.open_invoices) : '') + '</td><td>' + e(t.created_dmy) + '</td></tr>';
     }).join('') : '<tr><td colspan="8" class="muted">Keine Mandanten gefunden.</td></tr>';
   }
   $('tSearch').addEventListener('input', renderTenants);
   $('tFilter').addEventListener('change', renderTenants);
-  $('tReload').addEventListener('click', loadTenants);
-  $('tBody').addEventListener('click', function (ev) {
+  $('tRows').addEventListener('click', function (ev) {
     var tr = ev.target.closest ? ev.target.closest('tr[data-id]') : null;
     if (tr) openTenant(tr.getAttribute('data-id'));
   });
 
-  // ---------- Drawer ----------
+  // ---------- Mandanten-Modal ----------
   var cur = null;
+  function showTenantModal() { $('tmBack').classList.add('show'); document.body.style.overflow = 'hidden'; }
+  function closeTenant() { $('tmBack').classList.remove('show'); if (!isMailOpen()) document.body.style.overflow = ''; cur = null; }
   function openTenant(id) {
-    $('drawer').classList.add('on'); $('drawer').setAttribute('aria-hidden', 'false');
-    $('dBody').innerHTML = '<p class="muted">Lade …</p>';
+    showTenantModal();
+    $('tmBody').innerHTML = '<p class="muted">Lade …</p>';
     call('get_tenant', { tenant_id: id }).then(function (r) {
-      if (!(r.data && r.data.ok)) { toast(LV.errText(r), true); closeDrawer(); return; }
-      cur = r.data; renderDrawer();
+      if (!(r.data && r.data.ok)) { toast(LV.errText(r), true); closeTenant(); return; }
+      cur = r.data; renderTenant();
     });
   }
-  function closeDrawer() { $('drawer').classList.remove('on'); $('drawer').setAttribute('aria-hidden', 'true'); cur = null; }
-  $('dClose').addEventListener('click', closeDrawer);
-  $('drawer').addEventListener('click', function (ev) { if (ev.target === $('drawer')) closeDrawer(); });
-  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && cur) closeDrawer(); });
+  $('tmClose').addEventListener('click', closeTenant);
+  $('tmBack').addEventListener('click', function (ev) { if (ev.target === $('tmBack')) closeTenant(); });
 
   function kv(k, v) { return '<span class="k">' + k + '</span><span>' + v + '</span>'; }
   function invRow(v) {
-    var st = { open: '<span class="st warn">offen</span>', paid: '<span class="st ok">bezahlt</span>', void: '<span class="st off">storniert</span>' }[v.status] || e(v.status);
+    var st = { open: '<span class="pill open">offen</span>', paid: '<span class="pill paid">bezahlt</span>', void: '<span class="pill canceled">storniert</span>' }[v.status] || e(v.status);
     var acts = '';
-    if (v.status === 'open') acts += '<button class="btn primary xs" type="button" data-act="paid" data-id="' + e(v.id) + '">Bezahlt</button> <button class="btn ghost xs" type="button" data-act="void" data-id="' + e(v.id) + '">Storno</button> ';
-    if (v.status === 'void') acts += '<button class="btn ghost xs" type="button" data-act="open" data-id="' + e(v.id) + '">Wieder öffnen</button> ';
-    acts += '<button class="btn ghost xs" type="button" data-act="link" data-link="' + e(v.link) + '">Link</button>';
+    if (v.status === 'open') acts += '<button class="btn btn-primary btn-xs" type="button" data-act="paid" data-id="' + e(v.id) + '">Bezahlt</button> <button class="btn btn-ghost btn-xs" type="button" data-act="void" data-id="' + e(v.id) + '">Storno</button> ';
+    if (v.status === 'void') acts += '<button class="btn btn-ghost btn-xs" type="button" data-act="open" data-id="' + e(v.id) + '">Wieder öffnen</button> ';
+    acts += '<button class="btn btn-ghost btn-xs" type="button" data-act="link" data-link="' + e(v.link) + '">Link</button>';
     return '<tr><td>' + e(v.number) + '</td><td>' + e(v.plan_label) + ' / ' + (v.period === 'jahr' ? 'Jahr' : 'Monat') + '</td><td class="num">' + e(LV.euro(v.amount_cents)) + '</td>' +
-      '<td>' + st + (v.status === 'paid' && v.paid_dmy ? '<br><span class="muted" style="font-size:.78rem">' + e(v.paid_dmy) + '</span>' : '') + '</td><td>' + e(v.due_dmy) + '</td><td>' + acts + '</td></tr>';
+      '<td>' + st + (v.status === 'paid' && v.paid_dmy ? '<br><span class="muted" style="font-size:.78rem">' + e(v.paid_dmy) + '</span>' : '') + '</td><td>' + e(v.due_dmy) + '</td><td class="act">' + acts + '</td></tr>';
   }
-  function renderDrawer() {
+  function renderTenant() {
     var t = cur.tenant, c = cur.counts || {}, b = t.billing || {};
-    $('dTitle').textContent = t.name;
+    $('tmTitle').textContent = t.name;
     var h = '';
     h += '<div class="box"><h3>Übersicht</h3><div class="kv">' +
       kv('Tarif', e(t.plan_label) + ' ' + subPill(t)) +
-      kv('Zugang', t.status === 'aktiv' ? '<span class="st teal">aktiv</span>' : '<span class="st bad">gesperrt</span>') +
+      kv('Zugang', t.status === 'aktiv' ? '<span class="pill on">aktiv</span>' : '<span class="pill off">gesperrt</span>') +
       kv('Test bis', e(t.trial_ends_dmy || '–')) + kv('Bezahlt bis', e(t.paid_until_dmy || '–')) +
       kv('Kontakt', e(t.contact_email || '–')) +
       kv('Rechnung an', e([b.recipient, b.street, [b.zip, b.city].filter(Boolean).join(' '), b.email].filter(Boolean).join(', ') || '–')) +
@@ -312,29 +604,29 @@
       kv('Lagerorte / Buchungen', e(c.locations || 0) + ' / ' + e(c.movements || 0) + (c.last_movement_dmy ? ' (zuletzt ' + e(c.last_movement_dmy) + ')' : '')) +
       kv('ID', '<span class="mono">' + e(t.id) + '</span>') + '</div></div>';
     h += '<div class="box"><h3>Tarif setzen</h3><div class="row">' +
-      '<div class="field"><label for="fPlan">Tarif</label><select id="fPlan">' + Object.keys(PLANS).map(function (p) { return '<option value="' + p + '"' + (p === t.plan ? ' selected' : '') + '>' + PLANS[p] + '</option>'; }).join('') + '</select></div>' +
-      '<div class="field"><label for="fMonths">+ Monate bezahlt</label><input id="fMonths" type="number" min="0" max="60" value="0"></div>' +
-      '<div class="field"><label for="fTrial">Testtage (nur Test)</label><input id="fTrial" type="number" min="0" max="365" value="0"></div>' +
-      '<button class="btn primary sm" type="button" id="bPlan">Speichern</button></div>' +
-      '<p class="formnote mb0">„+ Monate“ verlängert „Bezahlt bis“ ab heute bzw. ab dem bisherigen Enddatum. Normalerweise passiert das automatisch über „Bezahlt“ bei der Rechnung.</p></div>';
-    h += '<div class="box"><h3>Zugang</h3><div class="row"><button class="btn sm ' + (t.status === 'aktiv' ? 'ghost' : 'primary') + '" type="button" id="bStatus">' + (t.status === 'aktiv' ? 'Mandant sperren' : 'Mandant freischalten') + '</button></div></div>';
-    h += '<div class="box"><h3>Notiz (intern)</h3><div class="field"><textarea id="fNote">' + e(t.notiz || '') + '</textarea></div><button class="btn primary sm" type="button" id="bNote">Notiz speichern</button></div>';
+      '<div class="f"><label class="fld" for="fPlan">Tarif</label><select id="fPlan">' + Object.keys(PLANS).map(function (p) { return '<option value="' + p + '"' + (p === t.plan ? ' selected' : '') + '>' + PLANS[p] + '</option>'; }).join('') + '</select></div>' +
+      '<div class="f"><label class="fld" for="fMonths">+ Monate bezahlt</label><input id="fMonths" type="number" min="0" max="60" value="0"></div>' +
+      '<div class="f"><label class="fld" for="fTrial">Testtage (nur Test)</label><input id="fTrial" type="number" min="0" max="365" value="0"></div>' +
+      '<button class="btn btn-primary btn-sm" type="button" id="bPlan">Speichern</button></div>' +
+      '<p class="note" style="margin-top:10px">„+ Monate“ verlängert „Bezahlt bis“ ab heute bzw. ab dem bisherigen Enddatum. Normalerweise passiert das automatisch über „Bezahlt“ bei der Rechnung.</p></div>';
+    h += '<div class="box"><h3>Zugang</h3><div class="row"><button class="btn btn-sm ' + (t.status === 'aktiv' ? 'btn-danger' : 'btn-ok') + '" type="button" id="bStatus">' + (t.status === 'aktiv' ? 'Mandant sperren' : 'Mandant freischalten') + '</button></div></div>';
+    h += '<div class="box"><h3>Notiz (intern)</h3><textarea id="fNote">' + e(t.notiz || '') + '</textarea><div style="margin-top:10px"><button class="btn btn-primary btn-sm" type="button" id="bNote">Notiz speichern</button></div></div>';
     h += '<div class="box"><h3>Rechnung erstellen</h3><div class="row">' +
-      '<div class="field"><label for="fIPlan">Tarif</label><select id="fIPlan"><option value="starter"' + (t.plan === 'starter' ? ' selected' : '') + '>Starter</option><option value="team"' + (t.plan === 'team' || t.plan === 'trial' ? ' selected' : '') + '>Team</option><option value="business"' + (t.plan === 'business' ? ' selected' : '') + '>Business</option></select></div>' +
-      '<div class="field"><label for="fIPeriod">Laufzeit</label><select id="fIPeriod"><option value="monat">1 Monat</option><option value="jahr">12 Monate</option></select></div>' +
-      '<button class="btn primary sm" type="button" id="bInv">Rechnung anlegen &amp; mailen</button></div></div>';
+      '<div class="f"><label class="fld" for="fIPlan">Tarif</label><select id="fIPlan"><option value="starter"' + (t.plan === 'starter' ? ' selected' : '') + '>Starter</option><option value="team"' + (t.plan === 'team' || t.plan === 'trial' ? ' selected' : '') + '>Team</option><option value="business"' + (t.plan === 'business' ? ' selected' : '') + '>Business</option></select></div>' +
+      '<div class="f"><label class="fld" for="fIPeriod">Laufzeit</label><select id="fIPeriod"><option value="monat">1 Monat</option><option value="jahr">12 Monate</option></select></div>' +
+      '<button class="btn btn-primary btn-sm" type="button" id="bInv">Rechnung anlegen &amp; mailen</button></div></div>';
     h += '<div class="box"><h3>Rechnungen (' + cur.invoices.length + ')</h3>' + (cur.invoices.length ?
-      '<div class="tscroll" style="box-shadow:none"><table class="a" style="min-width:600px"><thead><tr><th>Nr.</th><th>Tarif</th><th class="num">Betrag</th><th>Status</th><th>Fällig</th><th>Aktionen</th></tr></thead><tbody>' + cur.invoices.map(invRow).join('') + '</tbody></table></div>' :
-      '<p class="muted mb0">Noch keine Rechnungen.</p>') + '</div>';
-    h += '<div class="box"><h3>Nutzer (' + cur.members.length + ')</h3><div class="tscroll" style="box-shadow:none"><table class="a" style="min-width:520px"><thead><tr><th>Name</th><th>E-Mail</th><th>Rolle</th><th>Status</th><th>Seit</th></tr></thead><tbody>' +
-      cur.members.map(function (m) { return '<tr><td>' + e(m.name || '–') + '</td><td>' + e(m.email || '') + '</td><td>' + e(m.role) + '</td><td>' + (m.active ? '<span class="st ok">aktiv</span>' : '<span class="st off">inaktiv</span>') + '</td><td>' + e(m.created_dmy) + '</td></tr>'; }).join('') +
+      '<div class="subtable"><table><thead><tr><th>Nr.</th><th>Tarif</th><th class="num">Betrag</th><th>Status</th><th>Fällig</th><th style="text-align:right">Aktion</th></tr></thead><tbody>' + cur.invoices.map(invRow).join('') + '</tbody></table></div>' :
+      '<p class="muted" style="margin:0">Noch keine Rechnungen.</p>') + '</div>';
+    h += '<div class="box"><h3>Nutzer (' + cur.members.length + ')</h3><div class="subtable"><table><thead><tr><th>Name</th><th>E-Mail</th><th>Rolle</th><th>Status</th><th>Seit</th></tr></thead><tbody>' +
+      cur.members.map(function (m) { return '<tr><td>' + e(m.name || '–') + '</td><td>' + e(m.email || '') + '</td><td>' + e(m.role) + '</td><td>' + (m.active ? '<span class="pill on">aktiv</span>' : '<span class="pill canceled">inaktiv</span>') + '</td><td>' + e(m.created_dmy) + '</td></tr>'; }).join('') +
       '</tbody></table></div></div>';
-    h += '<div class="box danger"><h3>Mandant löschen</h3><p class="muted" style="font-size:.9rem">Löscht Firma, Nutzer, Artikel, Buchungen und Rechnungen unwiderruflich (Auth-Konten werden entfernt, sofern sie nicht in einem anderen Vaydena-Produkt genutzt werden). Zur Bestätigung den Firmennamen exakt eingeben: <b>' + e(t.name) + '</b></p>' +
-      '<div class="row"><div class="field"><input id="fConfirm" placeholder="Firmenname" autocomplete="off"></div><button class="btn danger sm" type="button" id="bDel">Endgültig löschen</button></div></div>';
-    $('dBody').innerHTML = h;
-    bindDrawer();
+    h += '<div class="box danger"><h3>Mandant löschen</h3><p class="muted" style="font-size:.9rem;margin-top:0">Löscht Firma, Nutzer, Artikel, Buchungen und Rechnungen unwiderruflich (Auth-Konten werden entfernt, sofern sie nicht in einem anderen Vaydena-Produkt genutzt werden). Zur Bestätigung den Firmennamen exakt eingeben: <b>' + e(t.name) + '</b></p>' +
+      '<div class="row"><div class="f"><input id="fConfirm" placeholder="Firmenname" autocomplete="off"></div><button class="btn btn-danger-solid btn-sm" type="button" id="bDel">Endgültig löschen</button></div></div>';
+    $('tmBody').innerHTML = h;
+    bindTenant();
   }
-  function bindDrawer() {
+  function bindTenant() {
     var t = cur.tenant;
     function refresh() { openTenant(t.id); loadTenants(); }
     function done(okText) { return function (r) { if (r.data && r.data.ok) { toast(okText); refresh(); } else toast(LV.errText(r), true); }; }
@@ -369,11 +661,11 @@
       if (!confirm('Wirklich endgültig löschen: ' + t.name + '?')) return;
       this.disabled = true;
       call('delete_tenant', { tenant_id: t.id, confirm: c }).then(function (r) {
-        if (r.data && r.data.ok) { toast('Mandant gelöscht (' + (r.data.deleted_users || 0) + ' Auth-Konten entfernt).'); closeDrawer(); loadTenants(); }
+        if (r.data && r.data.ok) { toast('Mandant gelöscht (' + (r.data.deleted_users || 0) + ' Auth-Konten entfernt).'); closeTenant(); loadTenants(); }
         else toast(LV.errText(r), true);
       });
     });
-    $('dBody').querySelectorAll('[data-act]').forEach(function (b) {
+    $('tmBody').querySelectorAll('[data-act]').forEach(function (b) {
       b.addEventListener('click', function () { invoiceAction(b.getAttribute('data-act'), b.getAttribute('data-id'), b.getAttribute('data-link'), refresh); });
     });
   }
@@ -397,32 +689,31 @@
   // ---------- Rechnungen ----------
   function loadInvoices() {
     var st = $('iFilter').value;
-    $('iBody').innerHTML = '<tr><td colspan="8" class="muted">Lade …</td></tr>';
+    $('iRows').innerHTML = '<tr><td colspan="8" class="muted">Lade …</td></tr>';
     call('list_invoices', st ? { status: st } : {}).then(function (r) {
-      if (!(r.data && r.data.ok)) { $('iBody').innerHTML = '<tr><td colspan="8" class="muted">Fehler: ' + e(LV.errText(r)) + '</td></tr>'; return; }
+      if (!(r.data && r.data.ok)) { $('iRows').innerHTML = '<tr><td colspan="8" class="muted">Fehler: ' + e(LV.errText(r)) + '</td></tr>'; return; }
       var rows = (r.data.invoices || []).filter(function (v) { return !st || v.status === st; });
       $('iCount').textContent = rows.length + ' Rechnung' + (rows.length === 1 ? '' : 'en');
-      $('iBody').innerHTML = rows.length ? rows.map(function (v) {
-        var stl = { open: '<span class="st warn">offen</span>', paid: '<span class="st ok">bezahlt</span>', void: '<span class="st off">storniert</span>' }[v.status] || e(v.status);
+      $('iRows').innerHTML = rows.length ? rows.map(function (v) {
+        var stl = { open: '<span class="pill open">offen</span>', paid: '<span class="pill paid">bezahlt</span>', void: '<span class="pill canceled">storniert</span>' }[v.status] || e(v.status);
         var acts = '';
-        if (v.status === 'open') acts += '<button class="btn primary xs" type="button" data-act="paid" data-id="' + e(v.id) + '">Bezahlt</button> <button class="btn ghost xs" type="button" data-act="void" data-id="' + e(v.id) + '">Storno</button> ';
-        if (v.status === 'void') acts += '<button class="btn ghost xs" type="button" data-act="open" data-id="' + e(v.id) + '">Wieder öffnen</button> ';
-        acts += '<button class="btn ghost xs" type="button" data-act="link" data-link="' + e(v.link) + '">Link</button>';
-        return '<tr><td><b>' + e(v.number) + '</b><br><span class="muted" style="font-size:.76rem">' + e(v.reference || '') + '</span></td>' +
+        if (v.status === 'open') acts += '<button class="btn btn-primary btn-xs" type="button" data-act="paid" data-id="' + e(v.id) + '">Bezahlt</button> <button class="btn btn-ghost btn-xs" type="button" data-act="void" data-id="' + e(v.id) + '">Storno</button> ';
+        if (v.status === 'void') acts += '<button class="btn btn-ghost btn-xs" type="button" data-act="open" data-id="' + e(v.id) + '">Wieder öffnen</button> ';
+        acts += '<button class="btn btn-ghost btn-xs" type="button" data-act="link" data-link="' + e(v.link) + '">Link</button>';
+        return '<tr><td><div class="pname">' + e(v.number) + '</div><div class="pmeta">' + e(v.reference || '') + '</div></td>' +
           '<td><a href="#" data-open-tenant="' + e(v.tenant_id) + '">' + e(v.tenant_name) + '</a></td><td>' + e(v.plan_label) + ' / ' + (v.period === 'jahr' ? 'Jahr' : 'Monat') + '</td>' +
           '<td class="num">' + e(LV.euro(v.amount_cents)) + '</td><td>' + stl + (v.status === 'paid' && v.paid_dmy ? '<br><span class="muted" style="font-size:.76rem">' + e(v.paid_dmy) + '</span>' : '') + '</td>' +
-          '<td>' + e(v.issued_dmy) + '</td><td>' + e(v.due_dmy) + '</td><td>' + acts + '</td></tr>';
+          '<td>' + e(v.issued_dmy) + '</td><td>' + e(v.due_dmy) + '</td><td class="act">' + acts + '</td></tr>';
       }).join('') : '<tr><td colspan="8" class="muted">Keine Rechnungen.</td></tr>';
-      $('iBody').querySelectorAll('[data-act]').forEach(function (b) {
+      $('iRows').querySelectorAll('[data-act]').forEach(function (b) {
         b.addEventListener('click', function () { invoiceAction(b.getAttribute('data-act'), b.getAttribute('data-id'), b.getAttribute('data-link'), loadInvoices); });
       });
-      $('iBody').querySelectorAll('[data-open-tenant]').forEach(function (a) {
+      $('iRows').querySelectorAll('[data-open-tenant]').forEach(function (a) {
         a.addEventListener('click', function (ev) { ev.preventDefault(); openTenant(a.getAttribute('data-open-tenant')); });
       });
     });
   }
   $('iFilter').addEventListener('change', loadInvoices);
-  $('iReload').addEventListener('click', loadInvoices);
 
   // ---------- Anfragen ----------
   function loadLeads() {
@@ -436,7 +727,6 @@
       }).join('') : '<p class="muted">Keine Anfragen.</p>';
     });
   }
-  $('lReload').addEventListener('click', loadLeads);
 
   // ---------- Statistik ----------
   function loadStats() {
@@ -448,6 +738,197 @@
       $('stats').innerHTML = list.map(function (x) { return '<div class="stat"><div class="n">' + e(x[1] == null ? 0 : x[1]) + '</div><div class="l">' + e(x[0]) + '</div></div>'; }).join('');
     });
   }
+
+  // ---------- Posteingang ----------
+  var MAILS = [], mailLoaded = false, mailBox = '', curMailHtml = '', curMail = null;
+  function isMailOpen() { return $('mailBack').classList.contains('show'); }
+  function fmtDateTime(iso) {
+    if (!iso) return '';
+    try {
+      var d = new Date(iso);
+      return d.toLocaleDateString('de-DE', { year: '2-digit', month: '2-digit', day: '2-digit' }) + ' ' +
+        d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+    } catch (err) { return ''; }
+  }
+  function fmtSize(n) {
+    n = +n || 0;
+    if (n >= 1048576) return (n / 1048576).toFixed(1).replace('.', ',') + ' MB';
+    if (n >= 1024) return Math.round(n / 1024) + ' kB';
+    return n + ' B';
+  }
+  function mailFail(r) {
+    var code = r && r.data && r.data.error;
+    if (r && r.status === 401) return;
+    var map = {
+      mail_not_configured: 'Das Postfach ist noch nicht verbunden. Bitte in Supabase die Secrets MAIL_USER und MAIL_PASSWORD setzen.',
+      imap_auth_failed: 'Anmeldung am Postfach fehlgeschlagen – bitte MAIL_USER und MAIL_PASSWORD prüfen.',
+      imap_connect_failed: 'Der Mailserver ist nicht erreichbar.',
+      imap_select_failed: 'Der Posteingang konnte nicht geöffnet werden.',
+      imap_timeout: 'Zeitüberschreitung beim Mailserver – bitte erneut versuchen.',
+      imap_closed: 'Verbindung zum Mailserver abgebrochen – bitte erneut versuchen.',
+      mail_too_large: 'Diese E-Mail ist zu groß für die Anzeige – bitte im Webmail öffnen.',
+      attachment_too_large: 'Dieser Anhang ist zu groß (max. 10 MB) – bitte im Webmail herunterladen.',
+      delete_failed: 'Die E-Mail konnte nicht gelöscht werden – bitte erneut versuchen.',
+      not_found: 'E-Mail nicht gefunden – Liste bitte aktualisieren.',
+      offline: 'Keine Verbindung zum Server.'
+    };
+    var msg = map[code] || ('Fehler: ' + (code || 'unbekannt'));
+    var el = $('mailError'); el.textContent = msg; el.hidden = false;
+    toast('Posteingang: Fehler', true);
+  }
+  function loadMails() {
+    $('mailError').hidden = true; $('mailEmpty').hidden = true;
+    $('mailRows').innerHTML = ''; $('mailSummary').innerHTML = '';
+    $('mailLoading').hidden = false;
+    mailCall('list', {}).then(function (r) {
+      if (!(r.data && r.data.ok)) { mailFail(r); return; }
+      MAILS = r.data.mails || []; mailBox = r.data.mailbox || '';
+      mailLoaded = true; renderMails();
+    }).then(function () { $('mailLoading').hidden = true; });
+  }
+  function renderMails() {
+    var tb = $('mailRows'); tb.innerHTML = '';
+    $('mailEmpty').hidden = MAILS.length > 0;
+    var neu = 0;
+    MAILS.forEach(function (m) { if (!m.seen) neu++; });
+    $('mailSummary').innerHTML =
+      '<span><b>' + MAILS.length + '</b> E-Mails' + (mailBox ? ' in <b>' + e(mailBox) + '</b>' : '') + '</span>' +
+      '<span><b>' + neu + '</b> ungelesen</span>';
+    MAILS.forEach(function (m) {
+      var tr = document.createElement('tr');
+      tr.className = 'mailrow' + (m.seen ? '' : ' unseen');
+      tr.innerHTML =
+        '<td><div class="mfrom">' + e(m.from || m.fromAddr || '?') + '</div>' +
+        (m.from && m.fromAddr && m.from !== m.fromAddr ? '<div class="pmeta">' + e(m.fromAddr) + '</div>' : '') + '</td>' +
+        '<td><span class="msubj">' + e(m.subject) + '</span>' + (m.seen ? '' : ' <span class="pill new">neu</span>') + '</td>' +
+        '<td class="num" style="white-space:nowrap">' + e(fmtDateTime(m.date)) + '</td>' +
+        '<td class="mailact"></td>';
+      tr.onclick = function () { openMail(m); };
+      var del = document.createElement('button');
+      del.type = 'button'; del.className = 'btn btn-sm mail-del';
+      del.title = 'E-Mail löschen'; del.setAttribute('aria-label', 'E-Mail löschen');
+      del.innerHTML = '🗑';
+      del.onclick = function (ev) { ev.stopPropagation(); deleteMail(m); };
+      tr.querySelector('.mailact').appendChild(del);
+      tb.appendChild(tr);
+    });
+  }
+  function showMailModal() { $('mailBack').classList.add('show'); document.body.style.overflow = 'hidden'; }
+  function hideMailModal() { $('mailBack').classList.remove('show'); if (!$('tmBack').classList.contains('show')) document.body.style.overflow = ''; curMailHtml = ''; curMail = null; }
+
+  function mailFrameDoc(html, allowRemote) {
+    var csp = allowRemote
+      ? "default-src 'none'; img-src https: http: data: cid:; style-src 'unsafe-inline'"
+      : "default-src 'none'; img-src data: cid:; style-src 'unsafe-inline'";
+    return '<!doctype html><html><head><meta charset="utf-8">' +
+      '<meta http-equiv="Content-Security-Policy" content="' + csp + '">' +
+      '<base target="_blank">' +
+      '<style>body{margin:12px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;' +
+      'color:#16323a;background:#fff;word-break:break-word}img{max-width:100%;height:auto}</style>' +
+      '</head><body>' + html + '</body></html>';
+  }
+  function renderMailContent(d) {
+    var box = $('mailContent'); box.innerHTML = '';
+    $('mailImgBtn').hidden = true;
+    if (d.html) {
+      curMailHtml = d.html;
+      var fr = document.createElement('iframe');
+      fr.className = 'mailframe';
+      fr.setAttribute('sandbox', 'allow-popups allow-popups-to-escape-sandbox');
+      fr.srcdoc = mailFrameDoc(d.html, false);
+      box.appendChild(fr);
+      if (/\ssrc=["']https?:/i.test(d.html) || /url\(https?:/i.test(d.html)) { $('mailImgBtn').hidden = false; }
+    } else {
+      var pre = document.createElement('pre');
+      pre.className = 'mailbody-pre';
+      pre.textContent = d.text || '(kein Inhalt)';
+      box.appendChild(pre);
+    }
+  }
+  function openMail(m) {
+    curMail = m;
+    showMailModal();
+    $('mailTitle').textContent = m.subject || 'E-Mail';
+    $('mailMeta').innerHTML = '';
+    $('mailAtt').hidden = true; $('mailAtt').innerHTML = '';
+    $('mailImgBtn').hidden = true;
+    $('mailContent').innerHTML = '<div class="empty"><span class="spin"></span>E-Mail wird geladen…</div>';
+    mailCall('get', { uid: m.uid }).then(function (r) {
+      if (!(r.data && r.data.ok)) { hideMailModal(); mailFail(r); return; }
+      var d = r.data, hh = d.headers || {};
+      var meta = '<div><b>Von</b><span>' + e(hh.from || '') +
+        (hh.fromAddr && hh.from !== hh.fromAddr ? ' &lt;' + e(hh.fromAddr) + '&gt;' : '') + '</span></div>';
+      if (hh.to) meta += '<div><b>An</b><span>' + e(hh.to) + '</span></div>';
+      meta += '<div><b>Datum</b><span>' + e(fmtDateTime(hh.date || m.date)) + '</span></div>';
+      $('mailMeta').innerHTML = meta;
+      if (d.attachments && d.attachments.length) {
+        $('mailAtt').hidden = false;
+        d.attachments.forEach(function (a) {
+          var bt = document.createElement('button');
+          bt.type = 'button'; bt.className = 'attchip';
+          bt.textContent = '📎 ' + (a.filename || 'Anhang') + ' ';
+          var sz = document.createElement('span'); sz.className = 'asize'; sz.textContent = fmtSize(a.size);
+          bt.appendChild(sz);
+          bt.onclick = function () { dlAttachment(m.uid, a.index, a.filename); };
+          $('mailAtt').appendChild(bt);
+        });
+      }
+      renderMailContent(d);
+      if (!m.seen) { m.seen = true; renderMails(); }
+    });
+  }
+  function dlAttachment(uid, index, name) {
+    toast('Anhang wird geladen…');
+    mailCall('attachment', { uid: uid, index: index }).then(function (r) {
+      if (!(r.data && r.data.ok)) { mailFail(r); return; }
+      var d = r.data, bin = atob(d.b64 || ''), arr = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      var blob = new Blob([arr], { type: d.mime || 'application/octet-stream' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = name || d.filename || 'anhang';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 5000);
+      toast('Anhang heruntergeladen');
+    });
+  }
+  function deleteMail(m) {
+    if (!m) return;
+    var subj = m.subject || '(kein Betreff)';
+    var von = m.from || m.fromAddr || '?';
+    if (!confirm('Diese E-Mail löschen?\n\n„' + subj + '“\nvon ' + von +
+      '\n\nSie wird aus dem Posteingang entfernt. Hat das Postfach einen Papierkorb, landet sie dort und lässt sich im Webmail wiederherstellen.')) return;
+    var delBtn = $('mailDelBtn');
+    var inModal = isMailOpen();
+    if (inModal) { delBtn.disabled = true; delBtn.innerHTML = '<span class="spin"></span>Löschen…'; }
+    toast('E-Mail wird gelöscht…');
+    mailCall('delete', { uid: m.uid }).then(function (r) {
+      delBtn.disabled = false; delBtn.innerHTML = 'Löschen';
+      if (!(r.data && r.data.ok)) { mailFail(r); return; }
+      MAILS = MAILS.filter(function (x) { return x.uid !== m.uid; });
+      renderMails();
+      if (isMailOpen()) hideMailModal();
+      toast(r.data.movedToTrash ? 'In den Papierkorb verschoben' : 'E-Mail gelöscht');
+    });
+  }
+  $('mailClose').addEventListener('click', hideMailModal);
+  $('mailCloseBtn').addEventListener('click', hideMailModal);
+  $('mailDelBtn').addEventListener('click', function () { if (curMail) deleteMail(curMail); });
+  $('mailImgBtn').addEventListener('click', function () {
+    var fr = $('mailContent').querySelector('iframe');
+    if (fr && curMailHtml) { fr.srcdoc = mailFrameDoc(curMailHtml, true); $('mailImgBtn').hidden = true; }
+  });
+  $('mailBack').addEventListener('click', function (ev) { if (ev.target === $('mailBack')) hideMailModal(); });
+
+  // ---------- Esc ----------
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key !== 'Escape') return;
+    if (isMailOpen()) { hideMailModal(); return; }
+    if ($('tmBack').classList.contains('show')) closeTenant();
+  });
+
+  // ---------- Start ----------
+  if (key) start(); else setTimeout(function () { try { $('akey').focus(); } catch (err) {} }, 50);
 })();
 </script>
 </body>
