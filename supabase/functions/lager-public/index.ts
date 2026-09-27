@@ -14,6 +14,28 @@ const json = (b: unknown, s = 200) =>
 
 // Direktverbindung: wenige, kurzlebige Verbindungen je Isolate (Slot-Erschoepfung am 2026-09-03, siehe lager-api).
 const sql = postgres(Deno.env.get("SUPABASE_DB_URL")!, { prepare: false, max: 2, idle_timeout: 10, max_lifetime: 600, connect_timeout: 10 });
+
+// auth.users ist mit anderen Vaydena-Produkten geteilt. Wird dort ein Konto gelöscht und mit derselben
+// E-Mail neu angelegt, zeigt lager.members.id ins Leere ("verwaist"). Die Verknüpfung wird erst nach
+// eingelöstem Reset-Link (Nachweis des Postfachs) auf das neue Konto umgestellt.
+async function orphanMember(email: string) {
+  const r = await sql`select m.id from lager.members m where lower(m.email) = ${email}
+    and not exists (select 1 from auth.users x where x.id = m.id) order by m.created_at desc limit 1`;
+  return r.length ? String(r[0].id) : null;
+}
+async function relinkOrphan(uid: string, email: string) {
+  await sql.begin(async (tx: any) => {
+    if ((await tx`select 1 from lager.members where id = ${uid} limit 1`).length) return;
+    const m = await tx`select m.id from lager.members m where lower(m.email) = ${email}
+      and not exists (select 1 from auth.users x where x.id = m.id) order by m.created_at desc limit 1 for update`;
+    if (!m.length) return;
+    const old = m[0].id;
+    await tx`update lager.members set id = ${uid}, updated_at = now() where id = ${old}`;
+    await tx`update lager.movements set member_id = ${uid} where member_id = ${old}`;
+    await tx`update lager.audit set member_id = ${uid} where member_id = ${old}`;
+    console.log("relinkOrphan: Mitglied neu verknüpft", String(old), "->", uid);
+  });
+}
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const SITE = "https://lagerverwaltung.vaydena.de";
@@ -196,16 +218,19 @@ Deno.serve(async (req: Request) => {
     if (action === "request_reset") {
       const email = str(body.email, 200).toLowerCase();
       if (!EMAIL_RE.test(email)) return json({ ok: true });
-      const au = await sql`select u.id from auth.users u join lager.members m on m.id = u.id where lower(u.email) = ${email} limit 1`;
-      if (!au.length) return json({ ok: true });
+      let au = await sql`select u.id from auth.users u join lager.members m on m.id = u.id where lower(u.email) = ${email} limit 1`;
+      // Verwaistes Mitglied (Auth-Konto gelöscht und neu angelegt): Reset-Link an das aktuelle Konto, Verknüpfung beim Einlösen
+      if (!au.length && (await orphanMember(email))) au = await sql`select id from auth.users where lower(email) = ${email} limit 1`;
+      if (!au.length) { console.log("request_reset: kein Lager-Konto"); return json({ ok: true }); }
       const cnt = await sql`select count(*)::int as n from lager.auth_tokens where email = ${email} and purpose = 'reset' and created_at > now() - interval '1 hour'`;
       if (cnt[0].n >= 3) return json({ ok: true });
       const token = randomToken(32);
       await sql`insert into lager.auth_tokens (token_hash, user_id, email, purpose, expires_at) values (${await sha256hex(token)}, ${au[0].id}, ${email}, 'reset', now() + interval '2 hours')`;
       const link = `${SITE}/anmelden.html?reset=${token}`;
-      await sendMail(email, `Passwort zurücksetzen — ${PRODUCT}`,
+      const sent = await sendMail(email, `Passwort zurücksetzen — ${PRODUCT}`,
         `Guten Tag,\n\nüber diesen Link legen Sie ein neues Passwort fest (2 Stunden gültig):\n${link}\n\nFalls Sie das nicht angefordert haben, ignorieren Sie diese E-Mail.\n\n${PRODUCT}`,
         mailShell("Passwort zurücksetzen", `<p>Über diesen Link legen Sie ein neues Passwort fest (2 Stunden gültig):</p>${button(link, "Neues Passwort festlegen")}<p style="font-size:13px;color:#5c7883">Falls Sie das nicht angefordert haben, ignorieren Sie diese E-Mail.</p>`));
+      if (!sent.ok) console.error("request_reset: Mailversand fehlgeschlagen:", sent.err);
       return json({ ok: true });
     }
 
@@ -221,7 +246,12 @@ Deno.serve(async (req: Request) => {
         returning user_id, email, purpose`;
       if (!rows.length) return json({ error: "invalid_token" }, 400);
       const tok = rows[0];
-      const u = await sql`select u.email, u.last_sign_in_at, m.auth_created from auth.users u join lager.members m on m.id = u.id where u.id = ${tok.user_id} limit 1`;
+      let u = await sql`select u.email, u.last_sign_in_at, m.auth_created from auth.users u join lager.members m on m.id = u.id where u.id = ${tok.user_id} limit 1`;
+      let relink = false;
+      if (!u.length && tok.purpose === "reset" && (await orphanMember(String(tok.email).toLowerCase()))) {
+        u = await sql`select email, last_sign_in_at, false as auth_created from auth.users where id = ${tok.user_id} limit 1`;
+        relink = true;
+      }
       // Nur Lager-Mitglieder mit unveränderter E-Mail. Einladungs-Links setzen nur bei neu angelegten, noch nie
       // benutzten Konten ein Passwort – ein geteiltes Vaydena-Konto kann darüber nicht übernommen werden.
       if (!u.length || String(u[0].email || "").toLowerCase() !== String(tok.email).toLowerCase()) return json({ error: "invalid_token" }, 400);
@@ -231,6 +261,8 @@ Deno.serve(async (req: Request) => {
         await sql`update lager.auth_tokens set used_at = null where token_hash = ${hash}`;
         return json({ error: "update_failed" }, 400);
       }
+      // Wer den Reset-Link aus dem Postfach eingelöst hat, besitzt die Adresse: verwaistes Mitglied übernehmen
+      if (relink) await relinkOrphan(String(tok.user_id), String(tok.email).toLowerCase());
       // übrige offene Links dieses Kontos entwerten
       await sql`update lager.auth_tokens set used_at = now() where user_id = ${tok.user_id} and used_at is null`;
       return json({ ok: true, email: tok.email, purpose: tok.purpose });
