@@ -42,7 +42,7 @@
   function code128Svg(text) {
     var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     try { JsBarcode(svg, String(text), { format: "CODE128", displayValue: false, margin: 0, height: 60, width: 2 }); }
-    catch (e) { return '<svg viewBox="0 0 10 10"></svg>'; }
+    catch (e) { return qrSvg(text); }
     var w = parseFloat(svg.getAttribute("width")) || 100, h = parseFloat(svg.getAttribute("height")) || 60;
     svg.setAttribute("viewBox", "0 0 " + w + " " + h);
     svg.removeAttribute("width"); svg.removeAttribute("height"); svg.removeAttribute("style");
@@ -63,6 +63,8 @@
   // label: {code, name, sub}
   function labelHtml(l, f, type, style) {
     var fs = Math.max(2.2, Math.min(4.6, f.h * 0.105));
+    // Code 128 kann nur ASCII – Umlaute usw. automatisch als QR drucken
+    if (type === "code128" && !/^[\x20-\x7e]*$/.test(String(l.code))) type = "qr";
     var svg = type === "code128" ? code128Svg(l.code) : qrSvg(l.code);
     var txt = '<div class="lbl-txt">' +
       (l.name ? '<div class="lbl-name" style="font-size:' + mm(fs) + '">' + esc(l.name) + '</div>' : '') +

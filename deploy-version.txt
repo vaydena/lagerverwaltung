@@ -5,3 +5,4 @@ Geschaeftsmodell: Abo je Firma - Starter 19 EUR, Team 49 EUR, Business 99 EUR pr
 Zahlung: NUR Bankueberweisung + GiroCode (kein Stripe, kein PayPal)
 Seiten: index.html (Landingpage), registrieren.html, anmelden.html, app.html (PWA, Service Worker sw.js + manifest.webmanifest), zahlung.html, betreiber.html, impressum.html, datenschutz.html, agb.html
 Backend: Supabase xeuexovdipdiiuzjpzkj (Frankfurt), Schema lager, Edge Functions lager-api / lager-public / lager-admin
+Update: 2026-09-27 (v1.1 – Chargen/MHD, Pickliste, Artikelbilder, Protokoll, Dark Mode, Tab-Sperre)

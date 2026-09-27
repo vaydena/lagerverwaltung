@@ -181,21 +181,46 @@
   }
   function modal(o) {
     var host = byId("modal"); if (!host) return;
+    var ret = App.modal ? App.modal._ret : document.activeElement;
     closeModal(true);
-    App.modal = o;
-    host.innerHTML = '<div class="modal-bg" data-act="modal-bg"><div class="modal' + (o.wide ? " wide" : "") + '" role="dialog" aria-modal="true">' +
-      '<div class="mhead"><h2>' + esc(o.title || "") + '</h2>' + (o.noClose ? "" : '<button class="iconbtn" type="button" data-act="modal-close" aria-label="Schließen">' + ic("x") + '</button>') + '</div>' +
+    App.modal = o; o._ret = ret;
+    host.innerHTML = '<div class="modal-bg" data-act="modal-bg"><div class="modal' + (o.wide ? " wide" : "") + '" role="dialog" aria-modal="true" aria-labelledby="modalTitle" tabindex="-1">' +
+      '<div class="mhead"><h2 id="modalTitle">' + esc(o.title || "") + '</h2>' + (o.noClose ? "" : '<button class="iconbtn" type="button" data-act="modal-close" aria-label="Schließen">' + ic("x") + '</button>') + '</div>' +
       (o.body || "") + (o.foot ? '<div class="foot">' + o.foot + '</div>' : "") + '</div></div>';
     host.hidden = false; document.body.classList.add("noscroll");
     if (o.onMount) { try { o.onMount(host); } catch (e) { console.error(e); } }
     var first = $("input:not([type=hidden]):not([type=checkbox]),select,textarea", host);
     if (first && window.matchMedia && matchMedia("(pointer:fine)").matches) { try { first.focus(); } catch (e) {} }
+    else { var dlg = $(".modal", host); if (dlg) try { dlg.focus({ preventScroll: true }); } catch (e) {} }
   }
+  // Tab-Taste im Dialog halten (Fokusfalle)
+  function trapFocus(e) {
+    var host = byId("modal"); if (!App.modal || !host || host.hidden) return;
+    var list = $$('button:not([disabled]),[href],input:not([disabled]):not([type=hidden]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])', host).filter(function (el) { return el.offsetParent !== null; });
+    if (!list.length) { e.preventDefault(); return; }
+    var first = list[0], last = list[list.length - 1], a = document.activeElement;
+    if (!host.contains(a)) { e.preventDefault(); first.focus(); }
+    else if (e.shiftKey && (a === first || !list.length || a.classList.contains("modal"))) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && a === last) { e.preventDefault(); first.focus(); }
+  }
+  // aria-pressed an Umschaltern (.seg) automatisch aus der Klasse "on" ableiten
+  function segA11y(root) {
+    $$(".seg > button", root || document).forEach(function (b) { var v = b.classList.contains("on") ? "true" : "false"; if (b.getAttribute("aria-pressed") !== v) b.setAttribute("aria-pressed", v); });
+    // Beschriftungen ohne for= mit dem ersten Eingabefeld der .field verknüpfen
+    $$(".field > label:not([for]):not([data-nofor])", root || document).forEach(function (l) {
+      var f = l.parentNode.querySelector("input:not([type=hidden]):not([type=checkbox]):not([type=radio]),select,textarea");
+      if (!f) { l.setAttribute("data-nofor", "1"); return; }
+      if (!f.id) f.id = "fld" + (++a11yN);
+      l.setAttribute("for", f.id);
+    });
+  }
+  var a11yN = 0;
   function closeModal(silent) {
     var host = byId("modal"), o = App.modal;
     App.modal = null;
     if (host) { host.innerHTML = ""; host.hidden = true; }
     document.body.classList.remove("noscroll");
+    if (o && o._ret && !App.modal && document.contains(o._ret) && o._ret.focus) { try { o._ret.focus({ preventScroll: true }); } catch (e) {} }
     if (o && o.onClose && !silent) { try { o.onClose(); } catch (e) { console.error(e); } }
     if (App.dirtyView && !App.modal) { App.dirtyView = false; renderView(); }
   }
@@ -441,6 +466,11 @@
 
   // ---------- Ereignisse ----------
   function bindEvents() {
+    if (window.MutationObserver) {
+      var segT = 0;
+      new MutationObserver(function () { if (!segT) segT = setTimeout(function () { segT = 0; segA11y(); }, 0); })
+        .observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["class"] });
+    }
     document.addEventListener("click", function (e) {
       var el = e.target.closest("[data-act]"); if (!el) return;
       var act = el.getAttribute("data-act"), fn = ACTIONS[act];
@@ -464,6 +494,7 @@
     });
     document.addEventListener("keydown", function (e) {
       if (e.key === "Escape") { if (overlay.open) closeOverlay(); else if (App.modal && !App.modal.noClose) closeModal(); else closeMore(); return; }
+      if (e.key === "Tab" && App.modal) { trapFocus(e); return; }
       if (e.key === "Enter" && e.target && e.target.tagName === "INPUT") {
         if (e.target.hasAttribute("data-noenter")) { e.preventDefault(); return; }
         var act = e.target.getAttribute("data-enter");
@@ -1698,16 +1729,19 @@
     return rows;
   }
   function invCountOf(id) { var raw = App.inv.counts[id]; return raw == null || raw === "" ? null : parseQty(raw); }
+  // Eingabe vorhanden, aber keine gültige (nicht negative) Zahl
+  function invBad(id) { var raw = App.inv.counts[id]; if (raw == null || String(raw).trim() === "") return false; var c = parseQty(raw); return c == null || c < 0; }
   function invRowHtml(r) {
     var raw = App.inv.counts[r.it.id], c = invCountOf(r.it.id), diff = c == null ? null : LVStore.round3(c - r.exp), cls = c == null ? "" : diff !== 0 ? "diff" : "done";
     return '<tr data-item="' + esc(r.it.id) + '" class="' + cls + '"><td><b>' + esc(r.it.name) + '</b><br><span class="note mono">' + esc(r.it.sku) + '</span></td>' +
       '<td class="num">' + esc(fmtQty(r.exp)) + ' <small class="muted">' + esc(unitOf(r.it)) + '</small></td>' +
-      '<td class="num"><input class="cnt" type="text" inputmode="decimal" value="' + esc(raw == null ? "" : raw) + '" data-input="inv-cnt" data-id="' + esc(r.it.id) + '" placeholder="–" autocomplete="off" data-enter="inv-next" aria-label="Gezählte Menge"></td>' +
+      '<td class="num"><input class="cnt" type="text" inputmode="decimal" value="' + esc(raw == null ? "" : raw) + '" data-input="inv-cnt" data-id="' + esc(r.it.id) + '" placeholder="–" autocomplete="off" data-enter="inv-next" aria-label="Gezählte Menge"' + (invBad(r.it.id) ? ' aria-invalid="true"' : '') + '></td>' +
       '<td class="num' + (diff == null ? " muted" : diff < 0 ? " errtxt" : diff > 0 ? "" : " muted") + '">' + (diff == null ? "–" : (diff > 0 ? "+" : "") + esc(fmtQty(diff))) + '</td></tr>';
   }
   function invPlan() {
     var inv = App.inv, out = [];
     invRows().forEach(function (r) {
+      if (invBad(r.it.id)) return;
       var c = invCountOf(r.it.id);
       if (c == null) { if (inv.zero && r.exp !== 0) c = 0; else return; }
       if (c < 0) return;
@@ -1719,10 +1753,11 @@
   function renderInvSum() {
     var sum = byId("invSum"), btn = byId("invBookBtn"); if (!sum) return;
     var rows = invRows(), counted = 0;
-    rows.forEach(function (r) { if (invCountOf(r.it.id) != null) counted++; });
+    var bad = 0;
+    rows.forEach(function (r) { if (invBad(r.it.id)) bad++; else if (invCountOf(r.it.id) != null) counted++; });
     var plan = invPlan();
-    sum.textContent = counted + " von " + rows.length + " gezählt · " + plan.length + " Abweichung" + (plan.length === 1 ? "" : "en");
-    if (btn) { btn.textContent = plan.length ? "Zählung buchen (" + plan.length + ")" : "Zählung buchen"; btn.disabled = !plan.length; }
+    sum.textContent = counted + " von " + rows.length + " gezählt · " + plan.length + " Abweichung" + (plan.length === 1 ? "" : "en") + (bad ? " · " + bad + " ungültige Eingabe" + (bad === 1 ? "" : "n") : "");
+    if (btn) { btn.textContent = plan.length ? "Zählung buchen (" + plan.length + ")" : "Zählung buchen"; btn.disabled = !plan.length || bad > 0; btn.title = bad ? "Bitte ungültige Mengen korrigieren" : ""; }
   }
   function renderInvTable() {
     var tb = $("#invTable tbody"); if (!tb) return;
@@ -1740,6 +1775,7 @@
   }
   function updateInvRow(id) {
     var tr = $('#invTable tr[data-item="' + id + '"]'); if (!tr) return;
+    var inp = tr.querySelector("input.cnt"); if (inp) { if (invBad(id)) inp.setAttribute("aria-invalid", "true"); else inp.removeAttribute("aria-invalid"); }
     var exp = 0; invRows().some(function (r) { if (r.it.id === id) { exp = r.exp; return true; } return false; });
     var c = invCountOf(id), diff = c == null ? null : LVStore.round3(c - exp);
     tr.className = c == null ? "" : diff !== 0 ? "diff" : "done";
@@ -1836,6 +1872,7 @@
   };
   ACTIONS["inv-book"] = function () {
     var inv = App.inv, loc = S.locations.get(inv.loc); if (!loc) return;
+    if (invRows().some(function (r) { return invBad(r.it.id); })) { toast("Bitte ungültige Mengen korrigieren (rot markiert).", "err"); var f = $('#invTable input[aria-invalid="true"]'); if (f) f.focus(); return; }
     var plan = invPlan();
     if (!plan.length) { toast("Keine Abweichungen – nichts zu buchen.", "ok"); return; }
     var neg = plan.filter(function (p) { return p.qty < 0; }); if (neg.length) { toast("Negative Zählwerte sind nicht möglich.", "err"); return; }
@@ -1857,7 +1894,7 @@
   // =====================================================================
   // Team (nur Administratoren)
   // =====================================================================
-  var APP_VERSION = "1.0 (2026-09-02)";
+  var APP_VERSION = "1.1 (2026-09-27)";
   var ROLES = { admin: "Administrator", mitarbeiter: "Mitarbeiter" };
   function roleLabel(r) { return ROLES[r] || r || "–"; }
   function onlineOr(msg) { if (navigator.onLine) return true; toast(msg || "Dafür ist eine Internetverbindung nötig.", "warn"); return false; }
