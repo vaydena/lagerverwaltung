@@ -14,8 +14,9 @@
       try { req = indexedDB.open(DB_NAME, DB_VER); } catch (e) { memOnly = true; return resolve(null); }
       req.onupgradeneeded = function () { var d = req.result; if (!d.objectStoreNames.contains(KV)) d.createObjectStore(KV); };
       req.onsuccess = function () { db = req.result; db.onversionchange = function () { try { db.close(); } catch (e) {} }; resolve(db); };
-      req.onerror = function () { memOnly = true; resolve(null); };
-      req.onblocked = function () { memOnly = true; resolve(null); };
+      req.onerror = function () { memOnly = true; S.storageError = "open"; resolve(null); };
+      // blockiert = ein anderer Tab hält eine ältere Version offen; kurz warten statt sofort nur im Speicher zu arbeiten
+      req.onblocked = function () { setTimeout(function () { if (!db) { memOnly = true; S.storageError = "blocked"; resolve(null); } }, 3000); };
     });
   }
   function kvGet(key) {
@@ -34,10 +35,19 @@
       try {
         var tx = db.transaction(KV, "readwrite");
         tx.objectStore(KV).put(val, key);
-        tx.oncomplete = function () { resolve(); };
-        tx.onerror = function () { resolve(); };
-        tx.onabort = function () { resolve(); };
-      } catch (e) { resolve(); }
+        tx.oncomplete = function () { if (S.storageError === "write") { S.storageError = null; emit("storage", null); } resolve(); };
+        tx.onerror = function () { writeFailed(); resolve(); };
+        tx.onabort = function () { writeFailed(); resolve(); };
+      } catch (e) { writeFailed(); resolve(); }
+    });
+  }
+  // Schreibfehler (z. B. Speicher voll) nicht still schlucken: die App zeigt einen Hinweis
+  function writeFailed() { if (S.storageError !== "write") { S.storageError = "write"; emit("storage", "write"); } }
+  function kvDel(key) {
+    delete mem[key];
+    if (memOnly || !db) return Promise.resolve();
+    return new Promise(function (resolve) {
+      try { var tx = db.transaction(KV, "readwrite"); tx.objectStore(KV).delete(key); tx.oncomplete = tx.onerror = tx.onabort = function () { resolve(); }; } catch (e) { resolve(); }
     });
   }
   function kvClear() {
@@ -55,7 +65,7 @@
 
   // ---------- Zustand ----------
   var S = {
-    ready: false, persistent: true,
+    ready: false, persistent: true, persisted: null, storageError: null,
     tenant: null, member: null, members: [],
     items: new Map(), codes: new Map(), locations: new Map(),
     stock: new Map(),       // "item|loc" -> {item_id, location_id, qty, updated_at}
@@ -63,6 +73,8 @@
     pending: [],            // wartende Bewegungen (in Reihenfolge)
     outbox: [],             // {kind:'item'|'location'|'item_code', id, ts, error?}
     failed: [],             // abgelehnte Buchungen (zur Anzeige)
+    lots: [],               // Chargenbestand {item_id, location_id, lot, best_before, qty} (Serverstand)
+    images: {},             // item_id -> updated_at des Artikelbilds (Bilddaten liegen einzeln unter "img:<id>")
     meta: { user_id: null, since: null, device_id: null, reserved: { items: [], locations: [] }, last_sync: null, last_used_location: null }
   };
   var effCache = null;
@@ -94,6 +106,8 @@
       case "outbox": return S.outbox.slice();
       case "failed": return S.failed.slice();
       case "members": return S.members.slice();
+      case "lots": return S.lots.slice();
+      case "images": return S.images;
       case "tenant": return S.tenant;
       case "member": return S.member;
       case "meta": return S.meta;
@@ -118,6 +132,13 @@
   function init(userId) {
     return open().then(function () {
       S.persistent = !memOnly;
+      // Browser um dauerhaften Speicher bitten (sonst darf er Offline-Daten bei Platzmangel löschen)
+      try {
+        if (!memOnly && navigator.storage && navigator.storage.persisted) {
+          navigator.storage.persisted().then(function (p) { return p || !navigator.storage.persist ? p : navigator.storage.persist(); })
+            .then(function (p) { S.persisted = !!p; }).catch(function () {});
+        }
+      } catch (e) {}
       return kvGet("meta");
     }).then(function (meta) {
       if (meta && meta.user_id && userId && meta.user_id !== userId) {
@@ -138,7 +159,7 @@
       if (!S.meta.reserved) S.meta.reserved = { items: [], locations: [] };
       S.meta.user_id = userId || S.meta.user_id;
       if (!S.meta.device_id) S.meta.device_id = "dev-" + uuid().slice(0, 8);
-      return Promise.all([kvGet("tenant"), kvGet("member"), kvGet("members"), kvGet("items"), kvGet("codes"), kvGet("locations"), kvGet("stock"), kvGet("movements"), kvGet("pending"), kvGet("outbox"), kvGet("failed")]);
+      return Promise.all([kvGet("tenant"), kvGet("member"), kvGet("members"), kvGet("items"), kvGet("codes"), kvGet("locations"), kvGet("stock"), kvGet("movements"), kvGet("pending"), kvGet("outbox"), kvGet("failed"), kvGet("lots"), kvGet("images")]);
     }).then(function (r) {
       S.tenant = r[0] || null; S.member = r[1] || null; S.members = r[2] || [];
       S.items = fromArr(r[3], function (x) { return x.id; });
@@ -147,6 +168,7 @@
       S.stock = fromArr(r[6], function (x) { return skey(x.item_id, x.location_id); });
       S.movements = fromArr(r[7], function (x) { return x.id; });
       S.pending = r[8] || []; S.outbox = r[9] || []; S.failed = r[10] || [];
+      S.lots = r[11] || []; S.images = r[12] || {};
       return kvGet("parked");
     }).then(function (parked) {
       var mine = parked && S.meta.user_id && parked[S.meta.user_id];
@@ -167,7 +189,7 @@
     var dev = S.meta.device_id;
     S.tenant = null; S.member = null; S.members = [];
     S.items = new Map(); S.codes = new Map(); S.locations = new Map(); S.stock = new Map(); S.movements = new Map();
-    S.pending = []; S.outbox = []; S.failed = [];
+    S.pending = []; S.outbox = []; S.failed = []; S.lots = []; S.images = {};
     S.meta = { user_id: S.meta.user_id, since: null, device_id: dev, reserved: { items: [], locations: [] }, last_sync: null, last_used_location: null };
     dirty = {}; effCache = null;
     // zurückgelegte Buchungen anderer Nutzer dieses Geräts nicht mitlöschen
@@ -334,6 +356,28 @@
   }
   function itemCount() { return activeItems().length; }
 
+  // ---------- Chargen / MHD ----------
+  function lotsOf(itemId) { return S.lots.filter(function (l) { return l.item_id === itemId && Number(l.qty) > 0; }); }
+  // Chargen mit MHD innerhalb der nächsten `days` Tage (oder bereits abgelaufen), früheste zuerst
+  function expiringLots(days) {
+    var lim = new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
+    return S.lots.filter(function (l) {
+      var it = S.items.get(l.item_id);
+      return Number(l.qty) > 0 && l.best_before && l.best_before <= lim && it && !it.deleted && S.locations.has(l.location_id);
+    }).sort(function (a, b) { return a.best_before.localeCompare(b.best_before); });
+  }
+  // Wurde die Buchung bereits storniert (bestätigt oder wartend)?
+  function reversalOf(movId) {
+    var hit = null;
+    S.movements.forEach(function (m) { if (!hit && m.reverses === movId) hit = m; });
+    if (!hit) hit = S.pending.find(function (m) { return m.reverses === movId; }) || null;
+    return hit;
+  }
+
+  // ---------- Artikelbilder (lokaler Cache) ----------
+  function getImageCache(itemId) { return kvGet("img:" + itemId); }
+  function setImageCache(itemId, rec) { return rec ? kvSet("img:" + itemId, rec) : kvDel("img:" + itemId); }
+
   // ---------- Nummernblöcke ----------
   function takeItemCode() {
     var p = S.meta.reserved.items, prefix = (S.tenant && S.tenant.code_prefix) || "ART";
@@ -356,6 +400,7 @@
     effectiveStock: effectiveStock, stockOf: stockOf, qtyAt: qtyAt, stockAtLocation: stockAtLocation, invalidate: function () { effCache = null; },
     activeItems: activeItems, activeLocations: activeLocations, lowStockItems: lowStockItems, codesOfItem: codesOfItem,
     resolveCode: resolveCode, codeInUse: codeInUse, findItems: findItems, memberName: memberName, itemCount: itemCount,
+    lotsOf: lotsOf, expiringLots: expiringLots, reversalOf: reversalOf, getImageCache: getImageCache, setImageCache: setImageCache,
     takeItemCode: takeItemCode, peekItemCode: peekItemCode, takeLocationCode: takeLocationCode
   };
 })();

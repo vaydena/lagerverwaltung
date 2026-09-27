@@ -15,12 +15,16 @@
     scan: { item: null, loc: null, to: null, type: "in", qty: 1, note: "", unknown: null, locInfo: null, queued: null },
     f: { artikel: { q: "", filter: "all", limit: 200 }, bestand: { q: "", loc: "", low: false, zero: false }, journal: { q: "", type: "", loc: "", days: 30, limit: 200 } },
     labels: null, inv: { loc: "", counts: {}, extra: [], zero: false },
-    firma: { period: "monat", invoices: null, result: null }, team: { list: null, limit: null, invite: null }
+    firma: { period: "monat", invoices: null, result: null }, team: { list: null, limit: null, invite: null },
+    audit: { entries: null, more: false, loading: false }
   };
   var VIEWS = {}, ACTIONS = {}, FORMS = {}, INPUTS = {};
 
   // ---------- Icons ----------
   var ICONS = {
+    image: '<rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>',
+    cart: '<circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>',
+    history: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
     scan: '<path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/>',
     box: '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>',
     layers: '<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>',
@@ -68,6 +72,9 @@
     code_exists: "Der Code ist bereits vergeben.", code_required: "Code fehlt.", name_required: "Name fehlt.", sku_required: "Artikelnummer fehlt.",
     bad_id: "Ungültige ID.", bad_plan: "Ungültiger Tarif.", cannot_edit_self: "Die eigene Rolle kann nicht geändert werden.",
     cannot_remove_self: "Der eigene Zugang kann nicht entfernt werden.", bad_member: "Ungültiges Teammitglied.", bad_name: "Der Firmenname ist zu kurz.",
+    bad_reverse: "Diese Buchung kann nicht storniert werden.", reverse_not_found: "Die ursprüngliche Buchung wurde auf dem Server nicht gefunden.",
+    already_reversed: "Diese Buchung wurde bereits storniert.", bad_image: "Ungültiges Bild (nur JPEG, PNG oder WebP).", image_too_large: "Das Bild ist zu groß.",
+    bad_range: "Ungültiger Zeitraum.", bad_email: "Ungültige E-Mail-Adresse.",
     server_error: "Serverfehler. Bitte später erneut versuchen.", error: "Unbekannter Fehler."
   });
   function errMsg(code) { return ERR[code] || (code ? "Fehler: " + code : ERR.error); }
@@ -99,7 +106,13 @@
     if (!/^-?\d*(\.\d+)?$/.test(t) || t === "-" || t === ".") return null;
     var n = Number(t); return isNaN(n) ? null : LVStore.round3(n);
   }
+  var nfEur = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" });
+  function fmtMoney(n) { return nfEur.format(Number(n) || 0); }
+  // Datum "YYYY-MM-DD" (MHD) -> "TT.MM.JJJJ", ohne Zeitzonenverschiebung
+  function fmtBB(d) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(d || ""); return m ? m[3] + "." + m[2] + "." + m[1] : ""; }
+  function todayIso() { var d = new Date(); return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
   function settings() { return (S.tenant && S.tenant.settings) || {}; }
+  function expiryDays() { var n = Number(settings().expiry_days); return n >= 1 && n <= 365 ? n : 30; }
   function unitOf(it) { return (it && it.unit) || settings().default_unit || "Stk"; }
   function isAdmin() { return !!(S.member && S.member.role === "admin"); }
   function negAllowed() { return settings().negative_stock !== false; }
@@ -272,18 +285,40 @@
     var it = S.items.get(m.item_id), name = it ? it.name : "gelöschter Artikel", unit = unitOf(it);
     var sub = esc(typeLabel(m.type)) + " · " + esc(locShort(m.location_id)) + (m.type === "transfer" ? " → " + esc(locShort(m.to_location_id)) : "");
     if (o.showItem !== false && it) sub = esc(it.sku) + " · " + sub;
+    if (m.lot) sub += " · Charge " + esc(m.lot);
+    if (m.best_before) sub += " · MHD " + esc(fmtBB(m.best_before));
     if (m.note) sub += " · " + esc(m.note);
     if (o.who !== false && m.member_id) sub += " · " + esc(nameOfMember(m.member_id));
     sub += " · " + esc(relTime(m.created_at)) + (m.pending ? " · <b>wartet</b>" : "");
+    var rev = !m.reverses && LVStore.reversalOf(m.id), tag = m.reverses ? ' <span class="pill grey">Storno</span>' : rev ? ' <span class="pill grey">storniert</span>' : "";
     var q, cls;
     if (m.type === "count") { q = "= " + fmtQty(m.qty) + (m.delta != null ? " (" + (m.delta >= 0 ? "+" : "") + fmtQty(m.delta) + ")" : ""); cls = ""; }
     else if (m.type === "in") { q = "+" + fmtQty(m.qty); cls = " plus"; }
     else if (m.type === "out") { q = "−" + fmtQty(m.qty); cls = " minus"; }
     else { q = fmtQty(m.qty); cls = ""; }
-    var inner = '<div class="ic ' + esc(m.type) + '">' + ic(m.type) + '</div><div class="txt"><div class="t">' + esc(name) + '</div><div class="s">' + sub + '</div></div><div class="q' + cls + '">' + esc(q) + '<small>' + esc(unit) + '</small></div>';
+    var canRev = o.rev && m.type !== "count" && !m.pending && !m.reverses && !rev && it && !it.deleted;
+    var inner = '<div class="ic ' + esc(m.type) + '">' + ic(m.type) + '</div><div class="txt"><div class="t">' + (o.rev && o.href ? '<a href="' + esc(o.href) + '">' + esc(name) + '</a>' : esc(name)) + tag + '</div><div class="s">' + sub + '</div></div><div class="q' + cls + (rev || m.reverses ? " muted" : "") + '">' + esc(q) + '<small>' + esc(unit) + '</small></div>';
+    if (o.rev) return '<div class="row' + (m.pending ? " pending" : "") + '">' + inner + (canRev ? '<button class="btn ghost xs" type="button" data-act="mov-reverse" data-id="' + esc(m.id) + '" title="Gegenbuchung erstellen">Storno</button>' : "") + '</div>';
     if (o.href) return '<a class="row' + (m.pending ? " pending" : "") + '" href="' + esc(o.href) + '">' + inner + '</a>';
     return '<div class="row' + (m.pending ? " pending" : "") + '">' + inner + '</div>';
   }
+
+  ACTIONS["mov-reverse"] = function (el) {
+    var m = S.movements.get(el.getAttribute("data-id")); if (!m) { toast("Nur übertragene Buchungen können storniert werden.", "warn"); return; }
+    var it = S.items.get(m.item_id); if (!it || it.deleted) { toast("Der Artikel existiert nicht mehr.", "err"); return; }
+    if (m.type === "count" || m.reverses || LVStore.reversalOf(m.id)) { toast(errMsg(m.type === "count" ? "bad_reverse" : "already_reversed"), "warn"); return; }
+    var from = m.type === "transfer" ? m.to_location_id : m.location_id, to = m.type === "transfer" ? m.location_id : null;
+    if (!S.locations.get(from) || (to && !S.locations.get(to))) { toast("Der Lagerort existiert nicht mehr.", "err"); return; }
+    var type = m.type === "in" ? "out" : m.type === "out" ? "in" : "transfer";
+    var html = '<p>Gegenbuchung zu <b>' + esc(typeLabel(m.type)) + ' ' + esc(fmtQty(m.qty)) + ' ' + esc(unitOf(it)) + ' · ' + esc(it.name) + '</b> vom ' + esc(fmtDate(m.created_at)) + ' erstellen?</p>' +
+      '<p class="note">Gebucht wird ein ' + esc(typeLabel(type)) + ' über dieselbe Menge' + (type === "transfer" ? ' von ' + esc(locShort(from)) + ' zurück nach ' + esc(locShort(to)) : ' am Lagerort ' + esc(locShort(from))) + '. Die ursprüngliche Buchung bleibt im Journal sichtbar.</p>';
+    confirmDlg("", { title: "Buchung stornieren", html: html, ok: "Stornieren", danger: true }).then(function (ok) {
+      if (!ok || LVStore.reversalOf(m.id)) return;
+      var n = { id: LVStore.uuid(), item_id: m.item_id, location_id: from, to_location_id: to, type: type, qty: m.qty, note: "Storno", lot: m.lot || null, best_before: m.best_before || null,
+        reverses: m.id, member_id: S.member ? S.member.id : null, device_id: S.meta.device_id, created_at: LVStore.nowIso() };
+      LVStore.addPending(n).then(function () { toast("Storno gebucht.", "ok"); LVSync.schedule(500); }, function (e) { toast("Storno konnte nicht gespeichert werden: " + (e && e.message || e), "err", 5000); });
+    });
+  };
 
   // ---------- Kamera ----------
   function camPref() { try { return localStorage.getItem("lv_cam") === "1"; } catch (e) { return false; } }
@@ -352,6 +387,7 @@
     { id: "bestand", label: "Bestand", icon: "layers" }, { id: "journal", label: "Journal", icon: "list" },
     { id: "lagerorte", label: "Lagerorte", icon: "pin" }, { id: "etiketten", label: "Etiketten", icon: "tag" },
     { id: "inventur", label: "Inventur", icon: "clipboard" }, { id: "team", label: "Team", icon: "users", admin: true },
+    { id: "protokoll", label: "Protokoll", icon: "history", admin: true },
     { id: "firma", label: "Firma & Abo", icon: "building" }, { id: "konto", label: "Konto", icon: "user" }
   ];
   function navItems() { return NAV.filter(function (n) { return !n.admin || isAdmin(); }); }
@@ -478,7 +514,8 @@
     else if (t.plan === "trial" && sub.days_left != null && sub.days_left <= 7) b("info", "info", "Testphase endet in " + sub.days_left + " Tag" + (sub.days_left === 1 ? "" : "en") + ".", isAdmin() ? "#firma" : null, "Tarif wählen");
     if (c.conflicts) b("warn", "warn", c.conflicts + " Änderung" + (c.conflicts === 1 ? "" : "en") + " wurde" + (c.conflicts === 1 ? "" : "n") + " vom Server abgelehnt.", "#konto", "Prüfen");
     if (c.failed) b("warn", "warn", c.failed + " Buchung" + (c.failed === 1 ? "" : "en") + " abgelehnt.", "#journal", "Anzeigen");
-    if (!S.persistent) b("warn", "warn", "Dieser Browser speichert keine Daten dauerhaft (privater Modus?). Offline-Buchungen gehen beim Schließen verloren.");
+    if (S.storageError === "write") b("err", "warn", "Speichern auf dem Gerät schlägt fehl (Speicher voll?). Bitte online bleiben, bis alles übertragen ist, und Speicher freigeben.");
+    else if (!S.persistent) b("warn", "warn", "Dieser Browser speichert keine Daten dauerhaft (privater Modus?). Offline-Buchungen gehen beim Schließen verloren.");
     host.innerHTML = h;
   }
   function renderSyncdot() {
@@ -551,6 +588,7 @@
       if (evt && evt.kind === "pull") renderNav();
       renderBanners(); renderSyncdot(); refresh(evt);
     });
+    LVStore.on("storage", function (err) { if (!App.booted) return; renderBanners(); if (err === "write") toast("Daten konnten auf dem Gerät nicht gespeichert werden.", "err", 5000); });
     LVStore.on("sync", function () { renderSyncdot(); if (App.booted) renderBanners(); if (App.booted && App.viewName === "konto" && !LVSync.st.syncing) softRender(); });
   }
   function boot() {
@@ -570,10 +608,10 @@
   // =====================================================================
   // Scannen & Buchen
   // =====================================================================
-  function scanReset() { var sc = App.scan; sc.item = null; sc.unknown = null; sc.locInfo = null; sc.qty = 1; sc.note = ""; sc.to = null; }
+  function scanReset() { var sc = App.scan; sc.item = null; sc.unknown = null; sc.locInfo = null; sc.qty = 1; sc.note = ""; sc.to = null; sc.lot = ""; sc.bb = ""; }
   function scanSelect(it) {
     var sc = App.scan;
-    sc.item = it; sc.unknown = null; sc.locInfo = null; sc.qty = 1; sc.note = ""; sc.to = null;
+    sc.item = it; sc.unknown = null; sc.locInfo = null; sc.qty = 1; sc.note = ""; sc.to = null; sc.lot = ""; sc.bb = "";
     if (!sc.loc || !S.locations.get(sc.loc)) sc.loc = defaultLoc();
   }
   function onScanCode(text, src) {
@@ -629,11 +667,12 @@
       h = '<div class="card rescard"><div class="head"><div><div class="name">' + esc(it.name) + '</div><div class="code">' + esc(it.sku) + (it.barcode ? " · " + esc(it.barcode) : "") + (it.category ? " · " + esc(it.category) : "") + '</div></div>' +
         '<a class="iconbtn" href="#artikel/' + esc(it.id) + '" aria-label="Artikel öffnen">' + ic("info") + '</a><button class="iconbtn" type="button" data-act="scan-clear" aria-label="Schließen">' + ic("x") + '</button></div>' +
         scanStockLine(it) +
-        '<div class="seg">' + ["in", "out", "transfer", "count"].map(function (t) { return '<button type="button" data-act="scan-type" data-v="' + t + '"' + (sc.type === t ? ' class="on"' : "") + '>' + typeLabel(t) + '</button>'; }).join("") + '</div>' +
+        '<div class="seg">' + ["in", "out", "transfer", "count"].map(function (t) { return '<button type="button" data-act="scan-type" data-v="' + t + '" aria-pressed="' + (sc.type === t) + '"' + (sc.type === t ? ' class="on"' : "") + '>' + typeLabel(t) + '</button>'; }).join("") + '</div>' +
         '<div class="' + (sc.type === "transfer" ? "f2" : "") + '"><div class="field"><label>' + (sc.type === "transfer" ? "Von" : "Lagerort") + '</label><select data-change="scan-loc">' + locOptions(sc.loc, null, "– Lagerort wählen –") + '</select></div>' +
         (sc.type === "transfer" ? '<div class="field"><label>Nach</label><select data-change="scan-to">' + locOptions(sc.to, sc.loc, "– Ziel wählen –") + '</select></div>' : "") + '</div>' +
         '<div class="field"><label>' + (sc.type === "count" ? "Gezählte Menge" : "Menge") + '</label><div class="stepper"><button type="button" data-act="scan-minus" aria-label="weniger">−</button><input id="scanQty" type="text" inputmode="decimal" value="' + esc(typeof sc.qty === "number" ? fmtIn(sc.qty) : String(sc.qty == null ? "" : sc.qty)) + '" data-input="scan-qty" data-enter="book" autocomplete="off"><button type="button" data-act="scan-plus" aria-label="mehr">+</button><span class="unit">' + esc(unit) + '</span></div>' +
         (hint ? '<div class="hint">' + hint + '</div>' : "") + '</div>' +
+        scanLotHtml(it) +
         '<div class="field"><label>Notiz (optional)</label><input id="scanNote" type="text" maxlength="200" value="' + esc(sc.note) + '" data-input="scan-note" data-enter="book" placeholder="z. B. Lieferschein 4711"></div>' +
         '<div class="btnrow"><button class="btn primary lg" type="button" data-act="book">' + esc(typeLabel(sc.type)) + ' buchen</button><button class="btn ghost" type="button" data-act="scan-clear">Abbrechen</button></div></div>';
     } else {
@@ -641,6 +680,25 @@
       h = '<div class="card"><p class="note" style="margin:0">' + (n ? "Artikel scannen oder oben suchen. Lagerort-Codes setzen den Buchungsort." : "Noch keine Artikel vorhanden. Unter <a href=\"#artikel\">Artikel</a> anlegen oder per CSV importieren.") + '</p></div>';
     }
     box.innerHTML = h;
+  }
+  // Charge / MHD: bei Eingang frei erfassen, bei Ausgang/Umlagerung aus dem Chargenbestand wählen (sonst FEFO auf dem Server)
+  function scanLotHtml(it) {
+    var sc = App.scan; if (sc.type === "count") return "";
+    if (sc.type === "in") {
+      var open = !!(sc.lot || sc.bb);
+      return '<details class="lotbox"' + (open ? " open" : "") + '><summary>Charge / MHD (optional)</summary><div class="f2">' +
+        '<div class="field"><label for="scanLot">Charge</label><input id="scanLot" type="text" maxlength="60" value="' + esc(sc.lot || "") + '" data-input="scan-lot" autocomplete="off" data-noenter></div>' +
+        '<div class="field"><label for="scanBB">MHD</label><input id="scanBB" type="date" value="' + esc(sc.bb || "") + '" data-change="scan-bb"></div></div></details>';
+    }
+    var lots = sc.loc ? LVStore.lotsOf(it.id).filter(function (l) { return l.location_id === sc.loc; }) : [];
+    if (!lots.length) { sc.lot = ""; sc.bb = ""; return ""; }
+    lots.sort(function (a, b) { return (a.best_before || "9999").localeCompare(b.best_before || "9999"); });
+    var cur = sc.lot || "", soon = new Date(Date.now() + expiryDays() * 864e5).toISOString().slice(0, 10);
+    return '<div class="field"><label for="scanLotSel">Charge</label><select id="scanLotSel" data-change="scan-lotsel"><option value="">Automatisch – älteste MHD zuerst</option>' +
+      lots.map(function (l, i) {
+        var bb = l.best_before ? " · MHD " + fmtBB(l.best_before) + (l.best_before < todayIso() ? " (abgelaufen)" : l.best_before <= soon ? " (bald)" : "") : "";
+        return '<option value="' + i + '"' + (l.lot === cur && (l.best_before || "") === (sc.bb || "") && (cur !== "" || sc.bb) ? " selected" : "") + '>' + esc((l.lot || "ohne Charge") + bb + " · " + fmtQty(l.qty) + " " + unitOf(it)) + '</option>';
+      }).join("") + '</select></div>';
   }
   function renderScanRecent() {
     var box = byId("scanRecent"); if (!box) return;
@@ -680,11 +738,20 @@
   ACTIONS["quick-pick"] = function (el) { var it = S.items.get(el.getAttribute("data-id")); quickClear(); if (it) { scanSelect(it); renderScanResult(); } };
   FORMS["scan-code"] = function () { var i = byId("codeIn"), v = i ? i.value.trim() : ""; if (!v) return; quickClear(); onScanCode(v, "input"); };
   ACTIONS["scan-clear"] = function () { scanReset(); renderScanResult(); var i = byId("codeIn"); if (i && window.matchMedia && matchMedia("(pointer:fine)").matches) i.focus(); };
-  ACTIONS["scan-type"] = function (el) { App.scan.type = el.getAttribute("data-v"); if (App.scan.type !== "transfer") App.scan.to = null; renderScanResult(); };
-  INPUTS["scan-loc"] = function (el) { App.scan.loc = el.value; if (App.scan.to === el.value) App.scan.to = null; if (App.scan.item) renderScanResult(); };
+  ACTIONS["scan-type"] = function (el) { App.scan.type = el.getAttribute("data-v"); if (App.scan.type !== "transfer") App.scan.to = null; App.scan.lot = ""; App.scan.bb = ""; renderScanResult(); };
+  INPUTS["scan-loc"] = function (el) { App.scan.loc = el.value; if (App.scan.to === el.value) App.scan.to = null; if (App.scan.type !== "in") { App.scan.lot = ""; App.scan.bb = ""; } if (App.scan.item) renderScanResult(); };
   INPUTS["scan-to"] = function (el) { App.scan.to = el.value; };
   INPUTS["scan-qty"] = function (el) { App.scan.qty = el.value; var q = parseQty(el.value); var hint = $("#scanResult .stepper + .hint"); if (hint && q == null) hint.textContent = "Bitte eine Zahl eingeben."; };
   INPUTS["scan-note"] = function (el) { App.scan.note = el.value; };
+  INPUTS["scan-lot"] = function (el) { App.scan.lot = el.value; };
+  INPUTS["scan-bb"] = function (el) { App.scan.bb = el.value; };
+  INPUTS["scan-lotsel"] = function (el) {
+    var sc = App.scan, it = sc.item; if (!it) return;
+    var lots = LVStore.lotsOf(it.id).filter(function (l) { return l.location_id === sc.loc; });
+    lots.sort(function (a, b) { return (a.best_before || "9999").localeCompare(b.best_before || "9999"); });
+    var l = el.value === "" ? null : lots[Number(el.value)];
+    sc.lot = l ? l.lot : ""; sc.bb = l ? (l.best_before || "") : "";
+  };
   function stepQty(d) {
     var q = parseQty(App.scan.qty); if (q == null) q = 0;
     q = LVStore.round3(q + d); if (q < 0) q = 0;
@@ -719,14 +786,18 @@
     if (q < 0 || q > 1e9 || (sc.type !== "count" && q <= 0)) { toast(sc.type === "count" ? "Gezählte Menge darf nicht negativ sein." : "Die Menge muss größer als 0 sein.", "err"); return; }
     var cur = LVStore.qtyAt(it.id, sc.loc), goesNeg = (sc.type === "out" || sc.type === "transfer") && q > cur;
     if (goesNeg && !negAllowed()) { toast("Nicht genug Bestand (" + fmtQty(cur) + " " + unitOf(it) + "). Negativer Bestand ist deaktiviert.", "err", 4000); return; }
+    var lot = sc.type === "count" ? "" : String((sc.type === "in" && byId("scanLot") ? byId("scanLot").value : sc.lot) || "").trim().slice(0, 60);
+    var bb = sc.type === "count" ? "" : String((sc.type === "in" && byId("scanBB") ? byId("scanBB").value : sc.bb) || "");
+    if (bb && !/^\d{4}-\d{2}-\d{2}$/.test(bb)) { toast("Bitte ein gültiges MHD eingeben.", "err"); return; }
     var m = { id: LVStore.uuid(), item_id: it.id, location_id: sc.loc, to_location_id: sc.type === "transfer" ? sc.to : null, type: sc.type, qty: q,
-      note: (byId("scanNote") ? byId("scanNote").value : sc.note).trim() || null, member_id: S.member ? S.member.id : null, device_id: S.meta.device_id, created_at: LVStore.nowIso() };
+      note: (byId("scanNote") ? byId("scanNote").value : sc.note).trim() || null, lot: lot || null, best_before: bb || null,
+      member_id: S.member ? S.member.id : null, device_id: S.meta.device_id, created_at: LVStore.nowIso() };
     S.meta.last_used_location = sc.loc; LVStore.save("meta");
     sc.busy = true;
     LVStore.addPending(m).then(function () {
       sc.busy = false;
       toast(typeLabel(m.type) + " gebucht: " + fmtQty(q) + " " + unitOf(it) + " · " + it.name + (goesNeg ? " (Bestand negativ)" : ""), goesNeg ? "warn" : "ok");
-      sc.qty = 1; sc.note = ""; renderScanResult(); renderScanRecent(); LVSync.schedule(600);
+      sc.qty = 1; sc.note = ""; sc.lot = ""; sc.bb = ""; renderScanResult(); renderScanRecent(); LVSync.schedule(600);
       var i = byId("codeIn"); if (i && window.matchMedia && matchMedia("(pointer:fine)").matches) i.focus();
     }, function (e) { sc.busy = false; toast("Buchung konnte nicht gespeichert werden: " + (e && e.message || e), "err", 5000); });
   };
@@ -759,9 +830,12 @@
     var it = S.items.get(id); if (!it || it.deleted) return '<div class="ph"><a class="iconbtn" href="#artikel">' + ic("back") + '</a><h1>Artikel nicht gefunden</h1></div>';
     var st = LVStore.stockOf(it.id), unit = unitOf(it), codes = LVStore.codesOfItem(it.id), low = isLow(it, st.total);
     var h = '<div class="ph"><a class="iconbtn" href="#artikel" aria-label="Zurück">' + ic("back") + '</a><h1>' + esc(it.name) + '</h1>' + (it.active === false ? '<span class="pill grey">inaktiv</span>' : "") + (low ? '<span class="pill gold">unter Mindestbestand</span>' : "") + (LVStore.hasPendingChange("item", it.id) ? '<span class="pill teal">noch nicht übertragen</span>' : "") + '</div>';
-    h += '<div class="grid g2"><div class="card"><h2>Stammdaten</h2><dl class="kv"><dt>Artikelnummer</dt><dd class="mono">' + esc(it.sku) + '</dd>' +
+    h += '<div class="grid g2"><div class="card"><h2>Stammdaten</h2><div class="itemimg" id="itemImg" data-id="' + esc(it.id) + '"></div><dl class="kv"><dt>Artikelnummer</dt><dd class="mono">' + esc(it.sku) + '</dd>' +
       '<dt>Barcode/EAN</dt><dd class="mono">' + (it.barcode ? esc(it.barcode) : "–") + '</dd><dt>Einheit</dt><dd>' + esc(unit) + '</dd><dt>Mindestbestand</dt><dd>' + (Number(it.min_stock) > 0 ? esc(fmtQty(it.min_stock)) + " " + esc(unit) : "–") + '</dd>' +
-      '<dt>Kategorie</dt><dd>' + (it.category ? esc(it.category) : "–") + '</dd><dt>Notiz</dt><dd>' + (it.note ? esc(it.note) : "–") + '</dd><dt>Weitere Codes</dt><dd><div class="chips">' +
+      '<dt>Kategorie</dt><dd>' + (it.category ? esc(it.category) : "–") + '</dd>' +
+      '<dt>Lieferant</dt><dd>' + (it.supplier ? esc(it.supplier) : "–") + '</dd>' +
+      '<dt>Einkaufspreis</dt><dd>' + (it.purchase_price != null && it.purchase_price !== "" ? esc(fmtMoney(it.purchase_price)) + " je " + esc(unit) : "–") + '</dd>' +
+      '<dt>Bestellmenge</dt><dd>' + (Number(it.reorder_qty) > 0 ? esc(fmtQty(it.reorder_qty)) + " " + esc(unit) : "–") + '</dd><dt>Notiz</dt><dd>' + (it.note ? esc(it.note) : "–") + '</dd><dt>Weitere Codes</dt><dd><div class="chips">' +
       codes.map(function (c) { return '<span class="chip mono">' + esc(c.code) + (isAdmin() ? ' <button class="iconbtn" style="width:22px;height:22px;border-radius:6px" type="button" data-act="code-del" data-id="' + esc(c.id) + '" aria-label="Code entfernen">' + ic("x") + '</button>' : "") + '</span>'; }).join("") +
       '<button class="btn xs ghost" type="button" data-act="code-add" data-id="' + esc(it.id) + '">' + ic("plus") + ' Code hinzufügen</button></div></dd></dl>' +
       '<div class="btnrow"><button class="btn primary" type="button" data-act="item-book" data-id="' + esc(it.id) + '">' + ic("scan") + ' Buchen</button><button class="btn ghost" type="button" data-act="item-edit" data-id="' + esc(it.id) + '">' + ic("edit") + ' Bearbeiten</button><button class="btn ghost" type="button" data-act="item-label" data-id="' + esc(it.id) + '">' + ic("tag") + ' Etikett</button>' +
@@ -769,11 +843,96 @@
     h += '<div class="card"><h2>Bestand</h2><p class="' + (st.total < 0 ? "errtxt" : "") + '" style="font-size:1.6rem;font-weight:800;margin:0 0 8px">' + esc(fmtQty(st.total)) + ' <small class="muted" style="font-size:.9rem">' + esc(unit) + '</small></p>';
     if (low) h += '<p class="note" style="color:var(--gold-d)">Mindestbestand ' + esc(fmtQty(it.min_stock)) + ' ' + esc(unit) + ' unterschritten.</p>';
     h += st.byLoc.length ? '<div class="tblwrap"><table class="tbl"><thead><tr><th>Lagerort</th><th class="num">Menge</th></tr></thead><tbody>' + st.byLoc.map(function (b) { return '<tr><td>' + esc(b.location.code + " · " + b.location.name) + '</td><td class="num' + (b.qty < 0 ? " errtxt" : "") + '">' + esc(fmtQty(b.qty)) + '</td></tr>'; }).join("") + '</tbody></table></div>' : '<p class="note">Kein Bestand.</p>';
+    if (Number(it.purchase_price) > 0 && st.total > 0) h += '<p class="note">Lagerwert: ' + esc(fmtMoney(st.total * Number(it.purchase_price))) + '</p>';
+    var lots = LVStore.lotsOf(it.id).slice().sort(lotCmp);
+    if (lots.length) {
+      h += '<h3>Chargen</h3><div class="tblwrap"><table class="tbl"><thead><tr><th>Lagerort</th><th>Charge</th><th>MHD</th><th class="num">Menge</th></tr></thead><tbody>' +
+        lots.map(function (l) { return '<tr><td>' + esc(locShort(l.location_id)) + '</td><td class="mono">' + (l.lot ? esc(l.lot) : "–") + '</td><td>' + (l.best_before ? esc(fmtBB(l.best_before)) + bbPill(l.best_before) : "–") + '</td><td class="num">' + esc(fmtQty(l.qty)) + '</td></tr>'; }).join("") +
+        '</tbody></table></div><p class="note">Stand vom letzten Abgleich.</p>';
+    }
     h += '</div></div>';
     var movs = movementsOfItem(it.id, 50);
-    h += '<h3 class="sh">Letzte Bewegungen</h3><div class="list">' + (movs.length ? movs.map(function (m) { return movRow(m, { showItem: false }); }).join("") : '<div class="empty">Noch keine Bewegungen.</div>') + '</div>';
+    h += '<h3 class="sh">Letzte Bewegungen</h3><div class="list">' + (movs.length ? movs.map(function (m) { return movRow(m, { showItem: false, rev: true }); }).join("") : '<div class="empty">Noch keine Bewegungen.</div>') + '</div>';
     return h;
   }
+  function lotCmp(a, b) { return (a.best_before || "9999").localeCompare(b.best_before || "9999") || String(a.lot).localeCompare(String(b.lot), "de"); }
+  function bbState(bb) {
+    if (!bb) return "";
+    if (bb < todayIso()) return "exp";
+    var lim = new Date(Date.now() + expiryDays() * 864e5), li = lim.getFullYear() + "-" + pad(lim.getMonth() + 1) + "-" + pad(lim.getDate());
+    return bb <= li ? "soon" : "";
+  }
+  function bbPill(bb) { var s = bbState(bb); return s === "exp" ? ' <span class="pill red">abgelaufen</span>' : s === "soon" ? ' <span class="pill gold">bald</span>' : ""; }
+
+  // ---------- Artikelbild ----------
+  function imgCanEdit() { return !!(S.tenant && S.tenant.sub && S.tenant.sub.active); }
+  function renderItemImg(id, data, note) {
+    var box = byId("itemImg"); if (!box || box.getAttribute("data-id") !== id) return;
+    var edit = imgCanEdit();
+    var pick = edit ? '<label class="btn ghost xs filebtn">' + ic("camera") + ' ' + (data ? "Bild ändern" : "Bild hinzufügen") + '<input type="file" accept="image/*" data-change="img-file" data-id="' + esc(id) + '"></label>' : "";
+    box.innerHTML = (data ? '<img src="' + esc(data) + '" alt="Artikelbild">' : (note ? '<div class="imgph">' + ic("image") + '<span>' + esc(note) + '</span></div>' : "")) +
+      '<div class="btnrow">' + pick + (data && edit ? '<button class="btn ghost xs danger" type="button" data-act="img-del" data-id="' + esc(id) + '">' + ic("trash") + ' Bild entfernen</button>' : "") + '</div>';
+  }
+  function loadItemImage(id) {
+    var upd = S.images[id];
+    if (!upd) { renderItemImg(id, null, ""); return; }
+    renderItemImg(id, null, "Bild wird geladen …");
+    LVStore.getImageCache(id).then(function (c) {
+      if (c && c.updated_at === upd && c.data) { renderItemImg(id, c.data); return; }
+      if (!navigator.onLine) { renderItemImg(id, c && c.data, c && c.data ? "" : "Bild offline nicht verfügbar."); return; }
+      LVSync.api("get_image", { item_id: id }, 30000).then(function (res) {
+        if (!okRes(res)) { renderItemImg(id, c && c.data, c && c.data ? "" : "Bild konnte nicht geladen werden."); return; }
+        var d = res.data;
+        if (!d.data) { delete S.images[id]; LVStore.save("images"); LVStore.setImageCache(id, null); renderItemImg(id, null, ""); return; }
+        LVStore.setImageCache(id, { data: d.data, updated_at: d.updated_at });
+        S.images[id] = d.updated_at; LVStore.save("images");
+        renderItemImg(id, d.data);
+      });
+    });
+  }
+  // Foto verkleinern (max. 480 px Kantenlänge) und als JPEG-data-URL liefern
+  function shrinkImage(file) {
+    return new Promise(function (resolve, reject) {
+      var url = URL.createObjectURL(file), img = new Image();
+      img.onload = function () {
+        URL.revokeObjectURL(url);
+        var max = 480, w = img.naturalWidth, h = img.naturalHeight, f = Math.min(1, max / Math.max(w, h));
+        var cv = document.createElement("canvas"); cv.width = Math.max(1, Math.round(w * f)); cv.height = Math.max(1, Math.round(h * f));
+        var cx = cv.getContext("2d"); cx.fillStyle = "#fff"; cx.fillRect(0, 0, cv.width, cv.height); cx.drawImage(img, 0, 0, cv.width, cv.height);
+        var d = cv.toDataURL("image/jpeg", 0.8);
+        if (d.length > 300000) d = cv.toDataURL("image/jpeg", 0.6);
+        if (d.length > 300000) reject(new Error("too_large")); else resolve(d);
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); reject(new Error("bad_image")); };
+      img.src = url;
+    });
+  }
+  INPUTS["img-file"] = function (el) {
+    var id = el.getAttribute("data-id"), file = el.files && el.files[0]; if (!file) return;
+    if (!onlineOr("Bilder lassen sich nur online speichern.")) { el.value = ""; return; }
+    if (!/^image\//.test(file.type)) { toast("Bitte eine Bilddatei wählen.", "warn"); el.value = ""; return; }
+    renderItemImg(id, null, "Bild wird gespeichert …");
+    shrinkImage(file).then(function (data) {
+      return LVSync.api("set_image", { item_id: id, data: data }, 60000).then(function (res) {
+        if (!okRes(res)) { toast(apiErr(res), "err", 4500); loadItemImage(id); return; }
+        S.images[id] = res.data.updated_at; LVStore.save("images");
+        LVStore.setImageCache(id, { data: data, updated_at: res.data.updated_at });
+        renderItemImg(id, data); toast("Bild gespeichert.", "ok");
+      });
+    }).catch(function (e) { toast(e && e.message === "too_large" ? ERR.image_too_large : ERR.bad_image, "err", 4000); loadItemImage(id); });
+  };
+  ACTIONS["img-del"] = function (el) {
+    var id = el.getAttribute("data-id");
+    confirmDlg("Artikelbild entfernen?", { ok: "Entfernen", danger: true }).then(function (ok) {
+      if (!ok || !onlineOr("Bilder lassen sich nur online ändern.")) return;
+      LVSync.api("set_image", { item_id: id, data: null }, 30000).then(function (res) {
+        if (!okRes(res)) { toast(apiErr(res), "err", 4500); return; }
+        delete S.images[id]; LVStore.save("images"); LVStore.setImageCache(id, null);
+        renderItemImg(id, null, ""); toast("Bild entfernt.");
+      });
+    });
+  };
+
   VIEWS.artikel = {
     title: function (arg) { if (!arg) return "Artikel"; var it = S.items.get(arg); return it ? it.name : "Artikel"; },
     render: function (arg) {
@@ -788,7 +947,7 @@
     },
     mount: function (el, arg) {
       if (arg === "neu") { itemEditor(null, { onClose: function () { if (App.route.arg === "neu") nav("artikel"); } }); return; }
-      if (!arg) renderArtList();
+      if (!arg) renderArtList(); else loadItemImage(arg);
     },
     update: function (evt) { if (App.route.arg && App.route.arg !== "neu") softRender(); else if (!App.route.arg) { renderArtList(); } }
   };
@@ -825,7 +984,7 @@
   // Artikel-Editor (Modal)
   function itemEditor(item, o) {
     o = o || {};
-    var isNew = !item, it = item || { name: "", sku: LVStore.peekItemCode() || "", unit: "", barcode: o.barcode || "", min_stock: 0, category: "", note: "", active: true };
+    var isNew = !item, it = item || { name: "", sku: LVStore.peekItemCode() || "", unit: "", barcode: o.barcode || "", min_stock: 0, category: "", note: "", active: true, supplier: "", purchase_price: null, reorder_qty: null };
     if (isNew && LVStore.itemCount() >= itemLimit()) { toast("Artikel-Limit des Tarifs erreicht (" + itemLimit() + "). Bitte Tarif wechseln.", "err", 4500); return; }
     var cats = categories();
     modal({
@@ -837,6 +996,9 @@
         '<div class="field withbtn"><div><label>Barcode / EAN</label><input name="barcode" maxlength="80" value="' + esc(it.barcode || "") + '" autocomplete="off" data-noenter class="mono" inputmode="numeric"></div>' + (LVScan.supported() ? '<button class="btn ghost" type="button" data-act="item-scan-barcode" aria-label="Barcode scannen">' + ic("camera") + '</button>' : "") + '</div>' +
         '<div class="f2"><div class="field"><label>Mindestbestand</label><input name="min_stock" type="text" inputmode="decimal" value="' + esc(Number(it.min_stock) > 0 ? fmtIn(it.min_stock) : "") + '" placeholder="0" autocomplete="off"><div class="hint">Warnung, wenn der Gesamtbestand darunter fällt.</div></div>' +
         '<div class="field"><label>Kategorie</label><input name="category" maxlength="60" list="catList" value="' + esc(it.category || "") + '" autocomplete="off"><datalist id="catList">' + cats.map(function (c) { return '<option value="' + esc(c) + '">'; }).join("") + '</datalist></div></div>' +
+        '<div class="field"><label for="itSupplier">Lieferant</label><input id="itSupplier" name="supplier" maxlength="120" list="supList" value="' + esc(it.supplier || "") + '" autocomplete="off"><datalist id="supList">' + suppliers().map(function (c) { return '<option value="' + esc(c) + '">'; }).join("") + '</datalist></div>' +
+        '<div class="f2"><div class="field"><label for="itPrice">Einkaufspreis (€ je Einheit)</label><input id="itPrice" name="purchase_price" type="text" inputmode="decimal" value="' + esc(it.purchase_price != null && it.purchase_price !== "" ? fmtIn(it.purchase_price) : "") + '" placeholder="0,00" autocomplete="off"></div>' +
+        '<div class="field"><label for="itReorder">Bestellmenge</label><input id="itReorder" name="reorder_qty" type="text" inputmode="decimal" value="' + esc(Number(it.reorder_qty) > 0 ? fmtIn(it.reorder_qty) : "") + '" placeholder="–" autocomplete="off"><div class="hint">Menge für den Bestellvorschlag.</div></div></div>' +
         '<div class="field"><label>Notiz</label><textarea name="note" rows="2" maxlength="500">' + esc(it.note || "") + '</textarea></div>' +
         (isNew ? "" : '<label class="check"><input type="checkbox" name="active"' + (it.active !== false ? " checked" : "") + '> Artikel aktiv (inaktive Artikel werden in Listen ausgeblendet)</label>') + '</form>',
       foot: '<button class="btn ghost" type="button" data-act="modal-close">Abbrechen</button><button class="btn primary" type="submit" form="itemForm">Speichern</button>',
@@ -856,8 +1018,13 @@
     if (v.barcode) { clash = LVStore.codeInUse(v.barcode, rec.id); if (clash) return fail("Der Barcode ist bereits vergeben: " + (clash.kind === "item" ? clash.rec.name : "Lagerort " + clash.rec.code)); }
     var min = v.min_stock ? parseQty(v.min_stock) : 0;
     if (min == null || min < 0) return fail("Ungültiger Mindestbestand.");
+    var price = v.purchase_price ? parseQty(v.purchase_price) : null;
+    if (v.purchase_price && (price == null || price < 0)) return fail("Ungültiger Einkaufspreis.");
+    var reo = v.reorder_qty ? parseQty(v.reorder_qty) : null;
+    if (v.reorder_qty && (reo == null || reo < 0)) return fail("Ungültige Bestellmenge.");
     if (ctx.isNew && LVStore.itemCount() >= itemLimit()) return fail("Artikel-Limit des Tarifs erreicht.");
     rec.name = v.name; rec.sku = v.sku; rec.unit = v.unit || null; rec.barcode = v.barcode || null; rec.min_stock = min; rec.category = v.category || null; rec.note = v.note || null;
+    rec.supplier = v.supplier || null; rec.purchase_price = price; rec.reorder_qty = reo || null;
     if (!ctx.isNew) rec.active = !!v.active;
     if (ctx.isNew && v.sku === LVStore.peekItemCode()) LVStore.takeItemCode();
     LVStore.upsertItem(rec).then(function (saved) {
@@ -890,15 +1057,23 @@
     }
     return { rows: rows, idx: idx };
   }
+  function suppliers() {
+    var set = {}; LVStore.activeItems().forEach(function (i) { if (i.supplier) set[i.supplier] = 1; });
+    return Object.keys(set).sort(function (a, b) { return a.localeCompare(b, "de"); });
+  }
+  function itemValue(it, total) { var p = Number(it.purchase_price); return p > 0 && total > 0 ? total * p : 0; }
   function renderBestKpis(idx) {
     var box = byId("bestKpis"); if (!box) return;
-    var items = LVStore.activeItems().filter(function (i) { return i.active !== false; }), low = 0, neg = 0;
-    items.forEach(function (i) { var t = idx.totals.get(i.id) || 0; if (isLow(i, t)) low++; if (t < 0) neg++; });
+    var items = LVStore.activeItems().filter(function (i) { return i.active !== false; }), low = 0, neg = 0, val = 0, priced = 0;
+    items.forEach(function (i) { var t = idx.totals.get(i.id) || 0; if (isLow(i, t)) low++; if (t < 0) neg++; if (Number(i.purchase_price) > 0) { priced++; val += itemValue(i, t); } });
+    var exp = LVStore.expiringLots(expiryDays()).length;
     var locs = LVStore.activeLocations().filter(function (l) { return l.active !== false; }).length;
     box.innerHTML = '<div class="kpi"><b>' + items.length + '</b><span>Artikel</span></div>' +
       '<div class="kpi"><b>' + locs + '</b><span>Lagerorte</span></div>' +
       '<div class="kpi"><b>' + idx.positions + '</b><span>Positionen</span></div>' +
       '<div class="kpi' + (low ? " warn" : "") + '"><b>' + low + '</b><span>Unter Minimum</span></div>' +
+      (priced ? '<div class="kpi"><b>' + esc(fmtMoney(val)) + '</b><span>Lagerwert (EK)</span></div>' : "") +
+      (exp ? '<button class="kpi warn" type="button" data-act="best-exp"><b>' + exp + '</b><span>MHD ≤ ' + expiryDays() + ' Tage</span></button>' : "") +
       (neg ? '<div class="kpi err"><b>' + neg + '</b><span>Negativ</span></div>' : "") +
       (S.pending.length ? '<div class="kpi"><b>' + S.pending.length + '</b><span>Wartend</span></div>' : "");
   }
@@ -941,7 +1116,10 @@
       return '<div class="ph"><h1>Bestand</h1><div class="spacer"></div>' +
         '<button class="btn ghost sm" type="button" data-act="best-csv">' + ic("download") + ' CSV</button>' +
         '<button class="btn ghost sm" type="button" data-act="best-inv-csv">Zählliste</button>' +
+        '<button class="btn ghost sm" type="button" data-act="best-order">' + ic("cart") + ' Bestellvorschlag</button>' +
+        '<button class="btn ghost sm" type="button" data-act="best-print">' + ic("print") + ' Bericht</button>' +
         (isAdmin() ? '<button class="btn ghost sm" type="button" data-act="best-json">Export (JSON)</button>' : "") + '</div>' +
+        ((LVSync.st.offline || LVSync.st.lastError) ? '<p class="note">' + ic("offline") + ' Stand vom letzten Abgleich' + (S.meta.last_sync ? " (" + esc(fmtDate(S.meta.last_sync)) + ")" : "") + ', zuzüglich der auf diesem Gerät wartenden Buchungen.</p>' : "") +
         '<div class="kpis" id="bestKpis"></div>' +
         '<div class="tools"><input class="search" type="search" placeholder="Artikel, Nummer, Barcode, Kategorie …" value="' + esc(f.q) + '" data-input="best-q" autocomplete="off">' +
         '<select data-change="best-loc" aria-label="Lagerort">' + locOptions(f.loc, null, "Alle Lagerorte") + '</select><span class="cnt" id="bestCnt"></span></div>' +
@@ -958,14 +1136,74 @@
   INPUTS["best-zero"] = function (el) { App.f.bestand.zero = el.checked; App.f.bestand.limit = 300; renderBestTable(); };
   ACTIONS["best-more"] = function () { App.f.bestand.limit += 300; renderBestTable(); };
   ACTIONS["best-csv"] = function () {
-    var d = bestData(), rows = [["Artikelnummer", "Artikel", "Kategorie", "Einheit", "Lagerort", "Lagerort-Name", "Menge", "Gesamt", "Mindestbestand"]];
+    var d = bestData(), rows = [["Artikelnummer", "Artikel", "Kategorie", "Einheit", "Lagerort", "Lagerort-Name", "Menge", "Gesamt", "Mindestbestand", "EK-Preis", "Wert"]];
+    function money(n) { return n ? nfIn.format(Math.round(n * 100) / 100) : ""; }
     d.rows.forEach(function (r) {
-      var it = r.it, min = Number(it.min_stock) || 0;
-      if (!r.byLoc.length) { rows.push([it.sku, it.name, it.category || "", unitOf(it), "", "", 0, r.total, min]); return; }
-      r.byLoc.forEach(function (p) { var l = S.locations.get(p.loc); rows.push([it.sku, it.name, it.category || "", unitOf(it), l ? l.code : "", l ? l.name : "", p.qty, r.total, min]); });
+      var it = r.it, min = Number(it.min_stock) || 0, p = Number(it.purchase_price) > 0 ? Number(it.purchase_price) : 0;
+      if (!r.byLoc.length) { rows.push([it.sku, it.name, it.category || "", unitOf(it), "", "", 0, r.total, min, money(p), ""]); return; }
+      r.byLoc.forEach(function (x) { var l = S.locations.get(x.loc); rows.push([it.sku, it.name, it.category || "", unitOf(it), l ? l.code : "", l ? l.name : "", x.qty, r.total, min, money(p), money(p && x.qty > 0 ? p * x.qty : 0)]); });
     });
     if (rows.length === 1) { toast("Keine Daten für den Export.", "warn"); return; }
     download("bestand-" + fileDate() + ".csv", csvText(rows)); toast("CSV wird heruntergeladen.");
+  };
+  ACTIONS["best-exp"] = function () {
+    var days = expiryDays(), lots = LVStore.expiringLots(days);
+    modal({
+      title: "MHD in den nächsten " + days + " Tagen", wide: true,
+      body: lots.length ? '<div class="tblwrap"><table class="tbl"><thead><tr><th>Artikel</th><th>Lagerort</th><th>Charge</th><th>MHD</th><th class="num">Menge</th></tr></thead><tbody>' +
+        lots.map(function (l) { var it = S.items.get(l.item_id); return '<tr><td><a href="#artikel/' + esc(l.item_id) + '" data-act="modal-close-nav">' + esc(it ? it.name : "?") + '</a></td><td>' + esc(locShort(l.location_id)) + '</td><td class="mono">' + (l.lot ? esc(l.lot) : "–") + '</td><td>' + esc(fmtBB(l.best_before)) + bbPill(l.best_before) + '</td><td class="num">' + esc(fmtQty(l.qty)) + ' <small class="muted">' + esc(unitOf(it)) + '</small></td></tr>'; }).join("") +
+        '</tbody></table></div><p class="note">Stand vom letzten Abgleich. Die Frist lässt sich unter Firma &amp; Abo → Einstellungen ändern.</p>' : '<p class="note">Keine Chargen laufen in diesem Zeitraum ab.</p>',
+      foot: '<button class="btn primary" type="button" data-act="modal-close">Schließen</button>'
+    });
+  };
+  ACTIONS["modal-close-nav"] = function (el) { var href = el.getAttribute("href") || ""; closeModal(true); nav(href.replace(/^#/, "")); };
+
+  // ---------- Bestellvorschlag ----------
+  function orderData() {
+    var idx = stockIndex(), rows = [];
+    LVStore.activeItems().forEach(function (it) {
+      var tot = LVStore.round3(idx.totals.get(it.id) || 0);
+      if (!isLow(it, tot)) return;
+      var need = LVStore.round3(Number(it.min_stock) - tot), qty = Math.max(Number(it.reorder_qty) || 0, need);
+      rows.push({ it: it, total: tot, qty: LVStore.round3(qty), price: Number(it.purchase_price) > 0 ? Number(it.purchase_price) : 0 });
+    });
+    rows.sort(function (a, b) { return String(a.it.supplier || "￿").localeCompare(String(b.it.supplier || "￿"), "de") || String(a.it.sku).localeCompare(String(b.it.sku), "de"); });
+    return rows;
+  }
+  ACTIONS["best-order"] = function () {
+    var rows = orderData(), h = "", last = null, sum = 0;
+    if (!rows.length) { modal({ title: "Bestellvorschlag", body: '<p class="note">Kein Artikel liegt unter dem Mindestbestand.</p>', foot: '<button class="btn primary" type="button" data-act="modal-close">Schließen</button>' }); return; }
+    h += '<p class="help">Alle aktiven Artikel unter Mindestbestand. Menge = Bestellmenge, mindestens aber die Differenz bis zum Mindestbestand.</p><div class="tblwrap"><table class="tbl"><thead><tr><th>Artikel</th><th class="num">Bestand</th><th class="num">Min.</th><th class="num">Bestellen</th><th class="num">Wert</th></tr></thead><tbody>';
+    rows.forEach(function (r) {
+      var sup = r.it.supplier || "";
+      if (sup !== last) { h += '<tr class="grp"><th colspan="5">' + esc(sup || "Ohne Lieferant") + '</th></tr>'; last = sup; }
+      var v = r.price * r.qty; sum += v;
+      h += '<tr><td><b>' + esc(r.it.name) + '</b><br><span class="note mono">' + esc(r.it.sku) + '</span></td><td class="num' + (r.total < 0 ? " errtxt" : "") + '">' + esc(fmtQty(r.total)) + '</td><td class="num muted">' + esc(fmtQty(r.it.min_stock)) + '</td><td class="num"><b>' + esc(fmtQty(r.qty)) + '</b> <small class="muted">' + esc(unitOf(r.it)) + '</small></td><td class="num">' + (v ? esc(fmtMoney(v)) : "–") + '</td></tr>';
+    });
+    h += '</tbody></table></div>' + (sum ? '<p><b>Summe (EK): ' + esc(fmtMoney(sum)) + '</b></p>' : "");
+    modal({ title: "Bestellvorschlag (" + rows.length + ")", wide: true, body: h, foot: '<button class="btn ghost" type="button" data-act="modal-close">Schließen</button><button class="btn primary" type="button" data-act="order-csv">' + ic("download") + ' CSV</button>' });
+  };
+  ACTIONS["order-csv"] = function () {
+    var out = [["Lieferant", "Artikelnummer", "Artikel", "EAN", "Einheit", "Bestand", "Mindestbestand", "Bestellmenge", "EK-Preis", "Wert"]];
+    orderData().forEach(function (r) { out.push([r.it.supplier || "", r.it.sku, r.it.name, r.it.barcode || "", unitOf(r.it), r.total, LVStore.round3(r.it.min_stock || 0), r.qty, r.price ? nfIn.format(r.price) : "", r.price ? nfIn.format(Math.round(r.price * r.qty * 100) / 100) : ""]); });
+    download("bestellvorschlag-" + fileDate() + ".csv", csvText(out)); toast("CSV wird heruntergeladen.");
+  };
+
+  // ---------- Druckbarer Bestandsbericht ----------
+  ACTIONS["best-print"] = function () {
+    var d = bestData(), f = App.f.bestand, t = S.tenant || {}, sum = 0;
+    if (!d.rows.length) { toast("Keine Daten für den Bericht.", "warn"); return; }
+    var body = d.rows.map(function (r) {
+      var p = Number(r.it.purchase_price) > 0 ? Number(r.it.purchase_price) : 0, v = p && r.qty > 0 ? p * r.qty : 0; sum += v;
+      return '<tr><td>' + esc(r.it.sku) + '</td><td>' + esc(r.it.name) + '</td><td>' + esc(r.byLoc.map(function (x) { return locShort(x.loc) + ": " + fmtQty(x.qty); }).join(", ")) + '</td><td class="n">' + esc(fmtQty(r.qty)) + ' ' + esc(unitOf(r.it)) + '</td><td class="n">' + (p ? esc(fmtMoney(p)) : "") + '</td><td class="n">' + (v ? esc(fmtMoney(v)) : "") + '</td></tr>';
+    }).join("");
+    var html = '<!doctype html><html lang="de"><head><meta charset="utf-8"><title>Bestandsbericht</title><style>body{font:12px/1.4 system-ui,sans-serif;margin:24px;color:#111}h1{font-size:18px;margin:0 0 4px}p{margin:0 0 12px;color:#555}table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid #ccc;padding:4px 6px;text-align:left;vertical-align:top}th{background:#f2f2f2}.n{text-align:right;white-space:nowrap}tfoot td{font-weight:700;border-top:2px solid #111}@media print{body{margin:0}}</style></head><body>' +
+      '<h1>Bestandsbericht – ' + esc(t.name || "") + '</h1><p>' + esc(f.loc ? "Lagerort " + locName(f.loc) : "Alle Lagerorte") + ' · Stand ' + esc(fmtDate(new Date().toISOString())) + (S.meta.last_sync ? " · letzter Abgleich " + esc(fmtDate(S.meta.last_sync)) : "") + '</p>' +
+      '<table><thead><tr><th>Nr.</th><th>Artikel</th><th>Lagerorte</th><th class="n">Menge</th><th class="n">EK</th><th class="n">Wert</th></tr></thead><tbody>' + body + '</tbody>' +
+      (sum ? '<tfoot><tr><td colspan="5">Summe Lagerwert (EK)</td><td class="n">' + esc(fmtMoney(sum)) + '</td></tr></tfoot>' : "") + '</table><script>window.onload=function(){window.print()}<\/script></body></html>';
+    var w = window.open("", "_blank");
+    if (!w) { toast("Das Druckfenster wurde blockiert. Bitte Pop-ups erlauben.", "warn", 4000); return; }
+    w.document.open(); w.document.write(html); w.document.close();
   };
   ACTIONS["best-inv-csv"] = function () {
     var f = App.f.bestand, rows = [["Lagerort", "Lagerort-Name", "Artikelnummer", "Artikel", "Einheit", "Soll", "Gezählt", "Bemerkung"]];
@@ -1025,7 +1263,7 @@
     var f = App.f.journal, arr = jFiltered();
     if (cnt) cnt.textContent = arr.length + " Buchung" + (arr.length === 1 ? "" : "en");
     if (!arr.length) { box.innerHTML = '<div class="empty">Keine Buchungen für diese Auswahl.</div>'; return; }
-    var h = arr.slice(0, f.limit).map(function (m) { return movRow(m, { showItem: true, who: true, href: "#artikel/" + m.item_id }); }).join("");
+    var h = arr.slice(0, f.limit).map(function (m) { return movRow(m, { showItem: true, who: true, href: "#artikel/" + m.item_id, rev: true }); }).join("");
     if (arr.length > f.limit) h += '<button class="more" type="button" data-act="j-more">Weitere anzeigen (' + (arr.length - f.limit) + ')</button>';
     box.innerHTML = h;
   }
@@ -1033,7 +1271,8 @@
     title: "Journal",
     render: function () {
       var f = App.f.journal; if (f.loc && !S.locations.get(f.loc)) f.loc = ""; if (!f.limit) f.limit = 200;
-      return '<div class="ph"><h1>Journal</h1><div class="spacer"></div><button class="btn ghost sm" type="button" data-act="j-csv">' + ic("download") + ' CSV</button></div>' +
+      return '<div class="ph"><h1>Journal</h1><div class="spacer"></div><button class="btn ghost sm" type="button" data-act="j-csv">' + ic("download") + ' CSV</button>' +
+        (isAdmin() ? '<button class="btn ghost sm" type="button" data-act="j-export">' + ic("download") + ' Export Zeitraum</button>' : "") + '</div>' +
         '<div id="jFailed"></div>' +
         '<div class="tools"><input class="search" type="search" placeholder="Artikel, Nummer, Notiz, Person …" value="' + esc(f.q) + '" data-input="j-q" autocomplete="off">' +
         '<select data-change="j-type" aria-label="Buchungsart"><option value="">Alle Buchungsarten</option>' + Object.keys(TYPES).map(function (t) { return '<option value="' + t + '"' + (f.type === t ? " selected" : "") + '>' + esc(TYPES[t]) + '</option>'; }).join("") + '</select>' +
@@ -1051,14 +1290,45 @@
   INPUTS["j-days"] = function (el) { App.f.journal.days = Number(el.value) || 0; App.f.journal.limit = 200; renderJList(); };
   ACTIONS["j-more"] = function () { App.f.journal.limit += 200; renderJList(); };
   ACTIONS["j-csv"] = function () {
-    var rows = [["Datum", "Art", "Artikelnummer", "Artikel", "Menge", "Einheit", "Lagerort", "Nach", "Differenz", "Notiz", "Gebucht von", "Status"]];
+    var rows = [["Datum", "Art", "Artikelnummer", "Artikel", "Menge", "Einheit", "Lagerort", "Nach", "Differenz", "Charge", "MHD", "Notiz", "Gebucht von", "Status"]];
     jFiltered().forEach(function (m) {
       var it = S.items.get(m.item_id);
-      rows.push([fmtDate(m.created_at), typeLabel(m.type), it ? it.sku : "", it ? it.name : "gelöscht", m.qty, unitOf(it), locShort(m.location_id),
-        m.type === "transfer" ? locShort(m.to_location_id) : "", m.delta != null ? m.delta : "", m.note || "", nameOfMember(m.member_id), m.pending ? "wartet" : "übertragen"]);
+      rows.push([fmtDate(m.created_at), typeLabel(m.type) + (m.reverses ? " (Storno)" : ""), it ? it.sku : "", it ? it.name : "gelöscht", m.qty, unitOf(it), locShort(m.location_id),
+        m.type === "transfer" ? locShort(m.to_location_id) : "", m.delta != null ? m.delta : "", m.lot || "", fmtBB(m.best_before), m.note || "", nameOfMember(m.member_id), m.pending ? "wartet" : "übertragen"]);
     });
     if (rows.length === 1) { toast("Keine Buchungen für den Export.", "warn"); return; }
     download("journal-" + fileDate() + ".csv", csvText(rows)); toast("CSV wird heruntergeladen.");
+  };
+  // Export über den Server: alle Buchungen eines Zeitraums (auch ältere, die nicht mehr auf dem Gerät liegen)
+  ACTIONS["j-export"] = function () {
+    var to = todayIso(), d = new Date(); d.setDate(1); var from = d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-01";
+    modal({
+      title: "Journal exportieren",
+      body: '<p class="help">Exportiert alle Buchungen des Zeitraums direkt vom Server als CSV (für Buchhaltung oder Auswertung).</p><form data-form="j-export" id="jExpForm" novalidate><div class="f2">' +
+        '<div class="field"><label for="jExpFrom">Von</label><input id="jExpFrom" name="from" type="date" value="' + from + '" required></div>' +
+        '<div class="field"><label for="jExpTo">Bis</label><input id="jExpTo" name="to" type="date" value="' + to + '" required></div></div></form>',
+      foot: '<button class="btn ghost" type="button" data-act="modal-close">Abbrechen</button><button class="btn primary" type="submit" form="jExpForm">Exportieren</button>'
+    });
+  };
+  FORMS["j-export"] = function (f) {
+    var v = formVals(f), btn = $('button[form="jExpForm"]');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(v.from) || !/^\d{4}-\d{2}-\d{2}$/.test(v.to) || v.from > v.to) { toast("Bitte einen gültigen Zeitraum wählen.", "warn"); return; }
+    if (!onlineOr("Der Export ist nur online möglich.")) return;
+    if (btn) btn.disabled = true;
+    LVSync.api("export_movements", { from: v.from, to: v.to }, 120000).then(function (res) {
+      if (btn) btn.disabled = false;
+      if (!okRes(res)) { toast(apiErr(res), "err", 4500); return; }
+      var list = res.data.movements || [];
+      if (!list.length) { toast("Keine Buchungen in diesem Zeitraum.", "warn"); return; }
+      var rows = [["Datum", "Art", "Artikelnummer", "Artikel", "Menge", "Bestandsänderung", "Einheit", "EK-Preis", "Lagerort", "Lagerort-Name", "Nach", "Nach-Name", "Charge", "MHD", "Notiz", "Gebucht von", "Storno von"]];
+      list.forEach(function (m) {
+        rows.push([fmtDate(m.created_at), typeLabel(m.type), m.sku || "", m.item_name || "", Number(m.qty), m.delta != null ? Number(m.delta) : "", m.unit || settings().default_unit || "Stk",
+          m.purchase_price != null ? Number(m.purchase_price) : "", m.loc_code || "", m.loc_name || "", m.to_code || "", m.to_name || "", m.lot || "", fmtBB(m.best_before), m.note || "", m.member || "", m.reverses || ""]);
+      });
+      download("journal-" + v.from + "_" + v.to + ".csv", csvText(rows));
+      closeModal(true);
+      toast(res.data.truncated ? "Export gekürzt auf " + list.length + " Buchungen – bitte einen kürzeren Zeitraum wählen." : list.length + " Buchungen exportiert.", res.data.truncated ? "warn" : "ok", 5000);
+    });
   };
   ACTIONS["failed-retry"] = function (el) {
     var id = el.getAttribute("data-id"), idx = -1;
@@ -1523,6 +1793,59 @@
     mount: function () { loadTeam(false); },
     update: function () { renderTeamList(); }
   };
+  // =====================================================================
+  // Protokoll (Admin)
+  // =====================================================================
+  var AUDIT = { location_deleted: "Lagerort gelöscht", item_deleted: "Artikel gelöscht", movement_reversed: "Buchung storniert", member_invited: "Mitglied eingeladen",
+    member_changed: "Mitglied geändert", member_removed: "Mitglied entfernt", company_changed: "Firmendaten geändert", plan_chosen: "Tarif bestellt" };
+  var AUDIT_FIELDS = { name: "Name", code_prefix: "Präfix", billing: "Rechnungsadresse", settings: "Einstellungen" };
+  function auditDetail(e) {
+    var d = e.detail || {};
+    switch (e.action) {
+      case "location_deleted": return (d.code || "") + " · " + (d.name || "");
+      case "item_deleted": return (d.sku || "") + " · " + (d.name || "");
+      case "movement_reversed": { var it = S.items.get(d.item_id); return (it ? it.name : "Artikel") + (d.qty != null ? " · " + fmtQty(d.qty) + " " + unitOf(it) : ""); }
+      case "member_invited": return (d.email || "") + " · " + roleLabel(d.role) + (d.existing_account ? " · vorhandenes Konto" : "");
+      case "member_changed": return (d.email || "") + (d.role ? " · Rolle: " + roleLabel(d.role) : "") + (d.active != null ? " · " + (d.active ? "aktiviert" : "deaktiviert") : "");
+      case "member_removed": return d.email || "";
+      case "company_changed": return (Array.isArray(d.fields) ? d.fields.map(function (f) { return AUDIT_FIELDS[f] || f; }).join(", ") : "") + (d.name ? " · " + d.name : "");
+      case "plan_chosen": return (PLANS[d.plan] ? PLANS[d.plan].label : (d.plan || "")) + (d.period ? " · " + (d.period === "jahr" ? "jährlich" : "monatlich") : "") + (d.invoice ? " · Rechnung " + d.invoice : "");
+    }
+    try { return JSON.stringify(d); } catch (x) { return ""; }
+  }
+  function renderAudit() {
+    var box = byId("auditList"), a = App.audit; if (!box) return;
+    if (!a.entries) { box.innerHTML = '<div class="empty">' + (a.loading ? "Wird geladen …" : navigator.onLine ? "Noch nicht geladen." : "Das Protokoll ist nur online verfügbar.") + '</div>'; return; }
+    if (!a.entries.length) { box.innerHTML = '<div class="empty">Noch keine Einträge.</div>'; return; }
+    box.innerHTML = a.entries.map(function (e) {
+      return '<div class="row"><div class="ic grey">' + ic("history") + '</div><div class="txt"><div class="t">' + esc(AUDIT[e.action] || e.action) + '</div><div class="s">' + esc(auditDetail(e)) + '</div><div class="s">' + esc(e.actor || "System") + ' · ' + esc(fmtDate(e.created_at)) + '</div></div></div>';
+    }).join("") + (a.more ? '<button class="more" type="button" data-act="audit-more"' + (a.loading ? " disabled" : "") + '>Weitere laden</button>' : "");
+  }
+  function loadAudit(more) {
+    var a = App.audit; if (a.loading) return;
+    if (!navigator.onLine) { renderAudit(); return; }
+    var before = more && a.entries && a.entries.length ? a.entries[a.entries.length - 1].id : null;
+    a.loading = true; renderAudit();
+    LVSync.api("list_audit", before ? { before: before } : {}, 20000).then(function (res) {
+      a.loading = false;
+      if (!okRes(res)) { toast(apiErr(res), "err", 4000); renderAudit(); return; }
+      a.entries = (more && a.entries ? a.entries : []).concat(res.data.entries || []); a.more = !!res.data.more;
+      renderAudit();
+    });
+  }
+  VIEWS.protokoll = {
+    title: "Protokoll",
+    render: function () {
+      return '<div class="ph"><h1>Protokoll</h1><div class="spacer"></div><button class="btn ghost sm" type="button" data-act="audit-refresh" aria-label="Neu laden">' + ic("refresh") + '</button></div>' +
+        '<p class="help">Wichtige Änderungen im Betrieb: Löschungen, Stornos, Team, Firmendaten und Tarif. Buchungen stehen im Journal.</p>' +
+        '<div class="card"><div class="list" id="auditList"></div></div>';
+    },
+    mount: function () { App.audit = { entries: null, more: false, loading: false }; loadAudit(false); },
+    update: function () {}
+  };
+  ACTIONS["audit-more"] = function () { loadAudit(true); };
+  ACTIONS["audit-refresh"] = function () { App.audit.entries = null; loadAudit(false); };
+
   ACTIONS["team-refresh"] = function () { loadTeam(true).then(function (ok) { if (ok) toast("Team aktualisiert.", "ok", 1500); }); };
 
   ACTIONS["member-invite"] = function () {
@@ -1635,6 +1958,11 @@
   FORMS.settings = function (f) {
     var v = formVals(f), btn = $("button[type=submit]", f);
     var payload = { default_unit: (v.default_unit || "Stk").slice(0, 12), label_format: String(v.label_format || "").slice(0, 40), label_type: v.label_type === "code128" ? "code128" : "qr", negative_stock: !!v.negative_stock };
+    var ed = parseInt(v.expiry_days, 10);
+    if (!(ed >= 1 && ed <= 365)) { toast("Die MHD-Warnfrist muss zwischen 1 und 365 Tagen liegen.", "warn"); return; }
+    var mailTo = String(v.low_stock_mail_to || "").trim();
+    if (mailTo && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(mailTo)) { toast("Bitte eine gültige E-Mail-Adresse für die Bestandswarnung eingeben.", "warn"); return; }
+    payload.expiry_days = ed; payload.low_stock_mail = !!v.low_stock_mail; payload.low_stock_mail_to = mailTo;
     saveCompany({ settings: payload }, "Einstellungen gespeichert.", btn).then(function (ok) { if (ok && App.labels) { App.labels.type = payload.label_type; saveLabelPrefs(); } });
   };
 
@@ -1740,6 +2068,9 @@
         '<div class="field"><label>Codeart auf Etiketten</label><select name="label_type"><option value="qr"' + (st.label_type !== "code128" ? " selected" : "") + '>QR-Code</option><option value="code128"' + (st.label_type === "code128" ? " selected" : "") + '>Barcode (Code 128)</option></select></div></div>' +
         '<div class="field"><label>Zusatzzeile auf Etiketten</label><input name="label_format" type="text" maxlength="40" value="' + esc(st.label_format || "") + '" placeholder="{firma}"><div class="hint">Platzhalter: {firma} {kategorie} {einheit} {sku} {name} {ean}</div></div>' +
         '<label class="check"><input type="checkbox" name="negative_stock"' + (st.negative_stock !== false ? " checked" : "") + '> Negativen Bestand zulassen (Ausgang auch buchen, wenn der Bestand nicht reicht)</label>' +
+        '<div class="field"><label for="setExp">MHD-Warnfrist (Tage)</label><input id="setExp" name="expiry_days" type="number" min="1" max="365" value="' + esc(String(expiryDays())) + '"><div class="hint">Chargen, deren MHD innerhalb dieser Frist endet, werden im Bestand hervorgehoben.</div></div>' +
+        '<label class="check"><input type="checkbox" name="low_stock_mail"' + (st.low_stock_mail ? " checked" : "") + '> Täglich eine E-Mail mit Artikeln unter Mindestbestand senden</label>' +
+        '<div class="field"><label for="setMail">Empfänger der Bestandswarnung</label><input id="setMail" name="low_stock_mail_to" type="email" maxlength="200" value="' + esc(st.low_stock_mail_to || "") + '" placeholder="' + esc(t.contact_email || "") + '"><div class="hint">Leer = Kontakt-E-Mail des Betriebs.</div></div>' +
         '<div class="btnrow"><button class="btn primary" type="submit">Speichern</button></div></form></div>';
       h += '<div class="card"><h2>Daten</h2><p class="help">Alle Daten gehören dem Betrieb und lassen sich jederzeit exportieren.</p>' +
         '<div class="btnrow"><button class="btn ghost sm" type="button" data-act="items-csv">' + ic("download") + ' Artikelliste (CSV)</button><button class="btn ghost sm" type="button" data-act="export-json">' + ic("download") + ' Komplettexport (JSON)</button></div></div>';
@@ -1759,9 +2090,9 @@
     });
   };
   ACTIONS["items-csv"] = function () {
-    var idx = stockIndex(), rows = [["Artikelnummer", "Bezeichnung", "EAN", "Einheit", "Mindestbestand", "Kategorie", "Notiz", "Bestand"]];
+    var idx = stockIndex(), rows = [["Artikelnummer", "Bezeichnung", "EAN", "Einheit", "Mindestbestand", "Kategorie", "Notiz", "Bestand", "Lieferant", "EK-Preis", "Bestellmenge"]];
     LVStore.activeItems().sort(function (a, b) { return String(a.sku).localeCompare(String(b.sku), "de"); }).forEach(function (it) {
-      rows.push([it.sku, it.name, it.barcode || "", unitOf(it), LVStore.round3(it.min_stock || 0), it.category || "", it.note || "", LVStore.round3(idx.totals.get(it.id) || 0)]);
+      rows.push([it.sku, it.name, it.barcode || "", unitOf(it), LVStore.round3(it.min_stock || 0), it.category || "", it.note || "", LVStore.round3(idx.totals.get(it.id) || 0), it.supplier || "", Number(it.purchase_price) > 0 ? nfIn.format(Number(it.purchase_price)) : "", Number(it.reorder_qty) > 0 ? LVStore.round3(it.reorder_qty) : ""]);
     });
     download("vaydena-lager-artikel-" + fileDate() + ".csv", csvText(rows), "text/csv");
   };
@@ -1805,7 +2136,7 @@
           ios ? '<p class="note">Auf iPhone und iPad: in Safari das Teilen-Symbol antippen und „Zum Home-Bildschirm“ wählen. Danach startet Vaydena Lager wie eine installierte App – auch offline.</p>' :
           '<p class="note">Zum Installieren im Browser-Menü „App installieren“ bzw. „Zum Startbildschirm hinzufügen“ wählen.</p>') +
         '<dl class="kv"><dt>Kamera-Scan</dt><dd>' + (LVScan.supported() ? "verfügbar" : (LVScan.secure() ? "auf diesem Gerät nicht verfügbar" : "nur über HTTPS verfügbar")) + '</dd>' +
-        '<dt>Dauerhafter Speicher</dt><dd>' + (S.persistent ? "ja" : "nein – Offline-Daten können beim Schließen verloren gehen") + '</dd>' +
+        '<dt>Dauerhafter Speicher</dt><dd>' + (!S.persistent ? "nein – Offline-Daten können beim Schließen verloren gehen" : S.storageError === "write" ? "Fehler beim Speichern (Speicher voll?)" : S.persisted ? "ja (vom Browser geschützt)" : "ja – der Browser kann Daten bei Speichermangel löschen") + '</dd>' +
         '<dt>Gerät</dt><dd class="mono">' + esc(String(S.meta.device_id || "").slice(0, 8)) + '</dd>' +
         '<dt>Version</dt><dd>' + esc(APP_VERSION) + '</dd></dl>' +
         '<label class="check"><input type="checkbox" data-change="cam-pref"' + (camPref() ? " checked" : "") + '> Kamera beim Öffnen von Scannen und Inventur automatisch starten</label></div>';

@@ -85,25 +85,6 @@ header.site{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.86);
 .hero .trustline span{display:flex;align-items:center;gap:7px}
 .hero .trustline svg{width:17px;height:17px;color:var(--gold)}
 
-/* Hero-Vorschau-Karte (Kurs-Mockup) */
-.previewcard{background:linear-gradient(180deg,#0f2531,#0b1c26);border:1px solid rgba(255,255,255,.09);
-  border-radius:20px;box-shadow:var(--shadow-l);overflow:hidden}
-.previewcard .pv-top{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.08)}
-.previewcard .dot{width:11px;height:11px;border-radius:50%}
-.previewcard .pv-body{padding:18px}
-.pv-video{aspect-ratio:16/9;border-radius:12px;background:
-   radial-gradient(circle at 50% 46%,rgba(224,164,35,.9),rgba(224,164,35,.15) 34%,transparent 46%),
-   linear-gradient(160deg,#16323f,#0d222c);display:grid;place-items:center;position:relative;border:1px solid rgba(255,255,255,.08)}
-.pv-video .play{width:64px;height:64px;border-radius:50%;background:rgba(11,26,36,.55);backdrop-filter:blur(3px);
-  display:grid;place-items:center;border:2px solid rgba(255,255,255,.6)}
-.pv-video .play svg{width:26px;height:26px;color:#fff;margin-left:3px}
-.pv-quiz{margin-top:16px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);border-radius:12px;padding:14px 15px}
-.pv-quiz .q{color:#fff;font-weight:700;font-size:.95rem;margin-bottom:11px}
-.pv-quiz .opt{display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:9px;font-size:.88rem;
-  background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);color:var(--navy-ink);margin-bottom:7px}
-.pv-quiz .opt.ok{background:rgba(31,157,107,.22);border-color:rgba(31,157,107,.6);color:#c7f0dc}
-.pv-quiz .opt .mk{width:18px;height:18px;border-radius:50%;border:1.5px solid currentColor;flex:0 0 auto;display:grid;place-items:center;font-size:.7rem}
-
 /* ---------- Sections ---------- */
 section{padding:70px 0}
 section.tight{padding:52px 0}

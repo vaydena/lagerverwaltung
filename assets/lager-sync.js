@@ -33,9 +33,14 @@
 
   // ---------- Push ----------
   function recLoc(r) { return { id: r.id, code: r.code, name: r.name, note: r.note || null, active: r.active !== false, deleted: !!r.deleted, created_at: r.created_at, updated_at: r.updated_at }; }
-  function recItem(r) { return { id: r.id, sku: r.sku, name: r.name, barcode: r.barcode || null, unit: r.unit || null, min_stock: Number(r.min_stock) || 0, category: r.category || null, note: r.note || null, active: r.active !== false, deleted: !!r.deleted, created_at: r.created_at, updated_at: r.updated_at }; }
+  function numOrNull(v) { return v == null || v === "" || !isFinite(Number(v)) ? null : Number(v); }
+  function recItem(r) {
+    return { id: r.id, sku: r.sku, name: r.name, barcode: r.barcode || null, unit: r.unit || null, min_stock: Number(r.min_stock) || 0, category: r.category || null, note: r.note || null,
+      supplier: r.supplier || null, purchase_price: numOrNull(r.purchase_price), reorder_qty: numOrNull(r.reorder_qty),
+      active: r.active !== false, deleted: !!r.deleted, created_at: r.created_at, updated_at: r.updated_at };
+  }
   function recCode(r) { return { id: r.id, item_id: r.item_id, code: r.code, deleted: !!r.deleted, created_at: r.created_at, updated_at: r.updated_at }; }
-  function recMov(m) { return { id: m.id, item_id: m.item_id, location_id: m.location_id, to_location_id: m.to_location_id || null, type: m.type, qty: Number(m.qty), note: m.note || null, created_at: m.created_at }; }
+  function recMov(m) { return { id: m.id, item_id: m.item_id, location_id: m.location_id, to_location_id: m.to_location_id || null, type: m.type, qty: Number(m.qty), note: m.note || null, lot: m.lot || null, best_before: m.best_before || null, reverses: m.reverses || null, created_at: m.created_at }; }
 
   function refBlocked(movId) {
     var m = S.pending.find(function (x) { return x.id === movId; });
@@ -137,6 +142,14 @@
         var arr = Array.from(S.movements.values()).sort(function (a, b) { return (b.created_at || "").localeCompare(a.created_at || ""); }).slice(0, 5000);
         S.movements = new Map(arr.map(function (m) { return [m.id, m]; }));
       }
+      // Chargen und Bildverzeichnis kommen immer vollständig
+      if (Array.isArray(d.stock_lots)) S.lots = d.stock_lots;
+      if (Array.isArray(d.images)) {
+        var imgs = {};
+        d.images.forEach(function (x) { imgs[x.item_id] = x.updated_at; });
+        Object.keys(S.images).forEach(function (id) { if (!imgs[id]) LVStore.setImageCache(id, null); });
+        S.images = imgs;
+      }
       // Bestandszeilen zu gelöschten Artikeln/Orten entfernen
       S.stock.forEach(function (r, k) { if (!S.items.has(r.item_id) || !S.locations.has(r.location_id)) S.stock.delete(k); });
       if (d.codes_reserved) {
@@ -150,7 +163,7 @@
       st.subInactive = !(d.tenant && d.tenant.sub && d.tenant.sub.active);
       st.authLost = false; st.lastError = null; st.lastOk = S.meta.last_sync;
       LVStore.invalidate();
-      return LVStore.save(["tenant", "member", "members", "items", "codes", "locations", "stock", "movements", "pending", "meta"], true).then(function () {
+      return LVStore.save(["tenant", "member", "members", "items", "codes", "locations", "stock", "movements", "pending", "meta", "lots", "images"], true).then(function () {
         LVStore.emit("change", { kind: "pull", full: !!d.full });
         return { ok: true, more: !!d.more };
       });
