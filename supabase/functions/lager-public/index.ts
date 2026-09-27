@@ -137,6 +137,7 @@ Deno.serve(async (req: Request) => {
   let body: Record<string, any>;
   try { body = await req.json(); } catch { return json({ error: "bad_json" }, 400); }
   if (!body || typeof body !== "object" || Array.isArray(body)) return json({ error: "bad_json" }, 400);
+  if (!body || typeof body !== "object" || Array.isArray(body)) return json({ error: "bad_json" }, 400);
   const action = String(body?.action ?? "").trim();
 
   try {

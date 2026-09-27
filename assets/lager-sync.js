@@ -37,6 +37,11 @@
   function recCode(r) { return { id: r.id, item_id: r.item_id, code: r.code, deleted: !!r.deleted, created_at: r.created_at, updated_at: r.updated_at }; }
   function recMov(m) { return { id: m.id, item_id: m.item_id, location_id: m.location_id, to_location_id: m.to_location_id || null, type: m.type, qty: Number(m.qty), note: m.note || null, created_at: m.created_at }; }
 
+  function refBlocked(movId) {
+    var m = S.pending.find(function (x) { return x.id === movId; });
+    if (!m) return false;
+    return S.outbox.some(function (o) { return o.error && (o.id === m.item_id || o.id === m.location_id || o.id === m.to_location_id); });
+  }
   function applyMaster(kind, results, startedAt) {
     (results || []).forEach(function (r) {
       var e = S.outbox.find(function (o) { return o.kind === kind && o.id === r.id; });
@@ -59,7 +64,13 @@
         else if (o.kind === "item_code") { rec = S.codes.get(o.id); if (rec && codes.length < 1000) codes.push(recCode(rec)); }
         if (!rec) S.outbox = S.outbox.filter(function (x) { return x !== o; });
       });
-      var movs = S.pending.slice(0, 2000).map(recMov);
+      // Buchungen zurückhalten, deren Artikel/Lagerort noch nicht auf dem Server ist (Stammdaten-Konflikt offen):
+      // sonst würden sie mit "nicht gefunden" verworfen, obwohl sie nach Klärung gültig sind.
+      var blocked = new Set();
+      S.outbox.forEach(function (o) { if (o.error && (o.kind === "item" || o.kind === "location")) blocked.add(o.id); });
+      var movs = S.pending.filter(function (m) {
+        return !blocked.has(m.item_id) && !blocked.has(m.location_id) && !(m.to_location_id && blocked.has(m.to_location_id));
+      }).slice(0, 2000).map(recMov);
       if (!locs.length && !items.length && !codes.length && !movs.length) return Promise.resolve({ ok: true });
       var startedAt = LVStore.nowIso();
       st.phase = "push"; emit();
@@ -73,6 +84,7 @@
         var rejected = 0;
         (R.movements || []).forEach(function (r) {
           if (r.ok || r.dup) LVStore.confirmMovement(r.id, r.delta, res.data.server_time);
+          else if (/not_found$/.test(r.error || "") && refBlocked(r.id)) { /* bleibt offen, bis der Stammdaten-Konflikt geklärt ist */ }
           else { LVStore.rejectMovement(r.id, r.error || "error"); rejected++; }
         });
         LVStore.invalidate();
@@ -140,9 +152,15 @@
       LVStore.invalidate();
       return LVStore.save(["tenant", "member", "members", "items", "codes", "locations", "stock", "movements", "pending", "meta"], true).then(function () {
         LVStore.emit("change", { kind: "pull", full: !!d.full });
-        return { ok: true };
+        return { ok: true, more: !!d.more };
       });
     });
+  }
+  // Große Rückstände seitenweise holen (Server liefert "more", solange weitere Bewegungen warten)
+  function pullAll() {
+    var pages = 0;
+    function next() { return pull().then(function (r) { return (r && r.ok && r.more && ++pages < 40) ? next() : r; }); }
+    return next();
   }
 
   // ---------- Steuerung ----------
@@ -152,7 +170,7 @@
     st.syncing = true; st.offline = false; st.phase = "start"; emit();
     var result = { ok: false };
     return push().then(function (r) {
-      if (r.ok || st.subInactive) return pull();   // bei Abo-Sperre trotzdem Stammdaten/Status holen
+      if (r.ok || st.subInactive) return pullAll();   // bei Abo-Sperre trotzdem Stammdaten/Status holen
       return r;
     }).then(function (r) { result = r || result; }).catch(function (e) { st.lastError = (e && e.message) || "error"; })
       .then(function () {

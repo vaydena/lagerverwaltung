@@ -30,6 +30,7 @@ const PLANS: Record<string, Plan> = {
 };
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const GRACE_DAYS = 7;
+const PULL_MOV_LIMIT = 5000;
 
 // ---------- Helfer ----------
 function claims(req: Request): { uid: string; email: string } | null {
@@ -57,7 +58,8 @@ function dmy(v: unknown): string {
   const s = ymd(v); const p = s.split("-");
   return p.length === 3 ? `${p[2]}.${p[1]}.${p[0]}` : s;
 }
-function todayYmd(): string { return new Date().toISOString().slice(0, 10); }
+// Kalendertag in Deutschland (Abo-/Testende gelten bis Mitternacht deutscher Zeit, nicht UTC)
+function todayYmd(): string { return new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Berlin" }).format(new Date()); }
 function addDays(d: string, n: number): string {
   const x = new Date(d + "T00:00:00Z"); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10);
 }
@@ -203,7 +205,7 @@ async function createInvoice(tenantId: string, plan: string, period: "monat" | "
 }
 
 // ---------- Push-Verarbeitung ----------
-type Res = { id: string; ok: boolean; error?: string; dup?: boolean; delta?: number };
+type Res = { id: string; ok: boolean; error?: string; dup?: boolean; delta?: number; stale?: boolean };
 
 async function upsertLocation(tid: string, rec: any): Promise<Res> {
   const id = String(rec?.id || "").toLowerCase();
@@ -218,6 +220,7 @@ async function upsertLocation(tid: string, rec: any): Promise<Res> {
       on conflict (id) do update set code = excluded.code, name = excluded.name, note = excluded.note,
         active = excluded.active, deleted = excluded.deleted, updated_at = excluded.updated_at, synced_at = now()
       where lager.locations.tenant_id = excluded.tenant_id and lager.locations.updated_at <= excluded.updated_at`;
+    await markStale("locations", tid, id, upd);
     return { id, ok: true };
   } catch (e) {
     if ((e as any)?.code === "23505") return { id, ok: false, error: "code_exists" };
@@ -232,15 +235,18 @@ async function upsertItem(tid: string, rec: any, canCreate: () => boolean, onCre
   if (!name) return { id, ok: false, error: "name_required" };
   const barcode = strOrNull(rec.barcode, 80);
   const unit = str(rec.unit, 20) || "Stk";
-  const minStock = num(rec.min_stock);
+  const ms = num(rec.min_stock);
+  const minStock = ms === null ? null : Math.min(1e9, Math.max(0, Math.round(ms * 1000) / 1000));
   const upd = isoOrNow(rec.updated_at);
-  const exists = await sql`select id from lager.items where id = ${id} and tenant_id = ${tid} limit 1`;
+  const exists = await sql`select id, deleted from lager.items where id = ${id} and tenant_id = ${tid} limit 1`;
+  // Neuanlage oder Wiederherstellung eines gelöschten Artikels zählt gegen das Artikel-Limit
+  const adds = !exists.length ? rec.deleted !== true : (exists[0].deleted === true && rec.deleted !== true);
   if (!exists.length) {
     const foreign = await sql`select id from lager.items where id = ${id} limit 1`;
     if (foreign.length) return { id, ok: false, error: "bad_id" };
     if (rec.deleted === true) return { id, ok: true };
-    if (!canCreate()) return { id, ok: false, error: "limit_items" };
   }
+  if (adds && !canCreate()) return { id, ok: false, error: "limit_items" };
   try {
     await sql`insert into lager.items (id, tenant_id, sku, name, barcode, unit, min_stock, category, note, active, deleted, created_at, updated_at)
       values (${id}, ${tid}, ${sku}, ${name}, ${barcode}, ${unit}, ${minStock}, ${strOrNull(rec.category, 80)}, ${strOrNull(rec.note, 2000)}, ${rec.active !== false}, ${rec.deleted === true}, ${isoOrNow(rec.created_at)}, ${upd})
@@ -248,7 +254,8 @@ async function upsertItem(tid: string, rec: any, canCreate: () => boolean, onCre
         min_stock = excluded.min_stock, category = excluded.category, note = excluded.note, active = excluded.active,
         deleted = excluded.deleted, updated_at = excluded.updated_at, synced_at = now()
       where lager.items.tenant_id = excluded.tenant_id and lager.items.updated_at <= excluded.updated_at`;
-    if (!exists.length) onCreated();
+    if (await markStale("items", tid, id, upd)) return { id, ok: true, stale: true };
+    if (adds) onCreated();
     return { id, ok: true };
   } catch (e) {
     if ((e as any)?.code === "23505") {
@@ -266,21 +273,30 @@ async function upsertItemCode(tid: string, rec: any, itemOk: (id: string) => boo
   const code = str(rec.code, 80);
   if (!code) return { id, ok: false, error: "code_required" };
   try {
+    const upd = isoOrNow(rec.updated_at);
     await sql`insert into lager.item_codes (id, tenant_id, item_id, code, deleted, created_at, updated_at)
-      values (${id}, ${tid}, ${itemId}, ${code}, ${rec.deleted === true}, ${isoOrNow(rec.created_at)}, ${isoOrNow(rec.updated_at)})
+      values (${id}, ${tid}, ${itemId}, ${code}, ${rec.deleted === true}, ${isoOrNow(rec.created_at)}, ${upd})
       on conflict (id) do update set code = excluded.code, deleted = excluded.deleted, updated_at = excluded.updated_at, synced_at = now()
-      where lager.item_codes.tenant_id = excluded.tenant_id and lager.item_codes.item_id = excluded.item_id`;
+      where lager.item_codes.tenant_id = excluded.tenant_id and lager.item_codes.item_id = excluded.item_id
+        and lager.item_codes.updated_at <= excluded.updated_at`;
+    await markStale("item_codes", tid, id, upd);
     return { id, ok: true };
   } catch (e) {
     if ((e as any)?.code === "23505") return { id, ok: false, error: "code_exists" };
     throw e;
   }
 }
+// Wurde eine ältere Fassung gesendet (Last-Write-Wins hat sie verworfen), die Serverfassung erneut
+// zum Abholen markieren, damit das Gerät seine veraltete lokale Kopie ersetzt. true = war veraltet.
+async function markStale(table: "items" | "locations" | "item_codes", tid: string, id: string, upd: string): Promise<boolean> {
+  const r = await sql.unsafe(`update lager.${table} set synced_at = now() where id = $1 and tenant_id = $2 and updated_at > $3::timestamptz returning id`, [id, tid, upd]);
+  return r.length > 0;
+}
 async function bump(tx: any, tid: string, item: string, loc: string, d: number) {
   await tx`insert into lager.stock (tenant_id, item_id, location_id, qty) values (${tid}, ${item}, ${loc}, ${d})
     on conflict (tenant_id, item_id, location_id) do update set qty = lager.stock.qty + ${d}, updated_at = now()`;
 }
-async function applyMovement(tid: string, memberId: string, deviceId: string | null, m: any, itemOk: (id: string) => boolean, locOk: (id: string) => boolean): Promise<Res> {
+async function applyMovement(tid: string, memberId: string, deviceId: string | null, m: any, itemOk: (id: string) => boolean, locOk: (id: string) => boolean, allowNeg: boolean): Promise<Res> {
   const id = String(m?.id || "").toLowerCase();
   if (!UUID_RE.test(id)) return { id, ok: false, error: "bad_id" };
   const type = String(m.type || "");
@@ -305,20 +321,54 @@ async function applyMovement(tid: string, memberId: string, deviceId: string | n
       values (${id}, ${tid}, ${itemId}, ${loc}, ${toLoc}, ${type}, ${q}, 0, ${note}, ${memberId}, ${deviceId}, ${createdAt})
       on conflict (id) do nothing returning id`;
     if (!ins.length) return { id, ok: true, dup: true };
+    // Bestandszeilen sperren (auch wenn noch keine existiert), damit parallele Buchungen sauber rechnen
+    const lockRow = async (l: string) => {
+      await tx`insert into lager.stock (tenant_id, item_id, location_id, qty) values (${tid}, ${itemId}, ${l}, 0) on conflict do nothing`;
+      const r = await tx`select qty::float8 as qty from lager.stock where tenant_id = ${tid} and item_id = ${itemId} and location_id = ${l} for update`;
+      return Number(r[0].qty);
+    };
+    // Eine spätere Inventur an diesem Ort hat den Ist-Bestand bereits festgestellt: verspätet
+    // eintreffende (offline gebuchte) ältere Bewegungen ändern den Bestand dort nicht mehr.
+    const countedAfter = async (l: string) => (await tx`select 1 from lager.movements where tenant_id = ${tid} and item_id = ${itemId}
+      and location_id = ${l} and type = 'count' and created_at > ${createdAt} and id <> ${id} limit 1`).length > 0;
     let delta = 0;
-    if (type === "in") { delta = q; await bump(tx, tid, itemId, loc, q); }
-    else if (type === "out") { delta = -q; await bump(tx, tid, itemId, loc, -q); }
-    else if (type === "transfer") { delta = -q; await bump(tx, tid, itemId, loc, -q); await bump(tx, tid, itemId, toLoc!, q); }
-    else {
-      const cur = await tx`select qty::float8 as qty from lager.stock where tenant_id = ${tid} and item_id = ${itemId} and location_id = ${loc} for update`;
-      const c = cur.length ? Number(cur[0].qty) : 0;
-      delta = Math.round((q - c) * 1000) / 1000;
-      await tx`insert into lager.stock (tenant_id, item_id, location_id, qty) values (${tid}, ${itemId}, ${loc}, ${q})
-        on conflict (tenant_id, item_id, location_id) do update set qty = ${q}, updated_at = now()`;
+    if (type === "count") {
+      const cur = await lockRow(loc);
+      if (!(await countedAfter(loc))) {
+        // Bestand zum Zeitpunkt der Zählung = aktuell minus alles, was danach gebucht wurde
+        const later = await tx`select
+            coalesce(sum(delta) filter (where location_id = ${loc}), 0)::float8 as d,
+            coalesce(sum(qty) filter (where type = 'transfer' and to_location_id = ${loc}), 0)::float8 as tin
+          from lager.movements where tenant_id = ${tid} and item_id = ${itemId} and created_at > ${createdAt} and id <> ${id}
+            and (location_id = ${loc} or to_location_id = ${loc})`;
+        const atT = cur - Number(later[0].d) - Number(later[0].tin);
+        delta = Math.round((q - atT) * 1000) / 1000;
+        if (delta) await bump(tx, tid, itemId, loc, delta);
+      }
+    } else {
+      delta = type === "in" ? q : -q;
+      const cur = await lockRow(loc);
+      const applyFrom = !(await countedAfter(loc));
+      if (applyFrom && !allowNeg && delta < 0 && cur + delta < -1e-9) throw new InsufficientStock();
+      if (applyFrom) await bump(tx, tid, itemId, loc, delta);
+      if (type === "transfer") { await lockRow(toLoc!); if (!(await countedAfter(toLoc!))) await bump(tx, tid, itemId, toLoc!, q); }
     }
     await tx`update lager.movements set delta = ${delta} where id = ${id}`;
     return { id, ok: true, delta };
+  }).catch((e: unknown) => {
+    if (e instanceof InsufficientStock) return { id, ok: false, error: "insufficient_stock" };
+    throw e;
   });
+}
+class InsufficientStock extends Error {}
+
+// Ein fehlerhafter Datensatz (z. B. Zahlenüberlauf) darf nicht den ganzen Abgleich blockieren
+async function safeRec(rec: any, fn: () => Promise<Res>): Promise<Res> {
+  try { return await fn(); } catch (e) {
+    const code = String((e as any)?.code || "");
+    if (code.startsWith("22") || code.startsWith("23")) return { id: String(rec?.id || ""), ok: false, error: "bad_value" };
+    throw e;
+  }
 }
 
 // ---------- Handler ----------
@@ -331,6 +381,7 @@ Deno.serve(async (req: Request) => {
 
   let body: Record<string, any>;
   try { body = await req.json(); } catch { return json({ error: "bad_json" }, 400); }
+  if (!body || typeof body !== "object" || Array.isArray(body)) return json({ error: "bad_json" }, 400);
   const action = String(body?.action ?? "").trim();
 
   try {
@@ -353,8 +404,10 @@ Deno.serve(async (req: Request) => {
     if (action === "pull") {
       const since = body.since ? String(body.since) : null;
       if (since && !Number.isFinite(Date.parse(since))) return json({ error: "bad_since" }, 400);
-      const nowRow = await sql`select now() as t`;
-      const serverTime = (nowRow[0].t as Date).toISOString();
+      // Cursor mit 2 Minuten Überlappung: Transaktionen, die vor now() begonnen, aber erst danach
+      // committet haben, tragen ältere Zeitstempel und würden sonst übersprungen. Doppelte kommen per ID-Abgleich weg.
+      const nowRow = await sql`select now() - interval '2 minutes' as t`;
+      let serverTime = (nowRow[0].t as Date).toISOString();
       const items = since
         ? await sql`select id, sku, name, barcode, unit, min_stock::float8 as min_stock, category, note, active, deleted, created_at, updated_at from lager.items where tenant_id = ${tid} and synced_at > ${since}::timestamptz`
         : await sql`select id, sku, name, barcode, unit, min_stock::float8 as min_stock, category, note, active, deleted, created_at, updated_at from lager.items where tenant_id = ${tid} and deleted = false`;
@@ -368,15 +421,21 @@ Deno.serve(async (req: Request) => {
         ? await sql`select item_id, location_id, qty::float8 as qty, updated_at from lager.stock where tenant_id = ${tid} and updated_at > ${since}::timestamptz`
         : await sql`select item_id, location_id, qty::float8 as qty, updated_at from lager.stock where tenant_id = ${tid}`;
       const movements = since
-        ? await sql`select id, item_id, location_id, to_location_id, type, qty::float8 as qty, delta::float8 as delta, note, member_id, device_id, created_at, received_at from lager.movements where tenant_id = ${tid} and received_at > ${since}::timestamptz order by created_at desc limit 5000`
+        ? await sql`select id, item_id, location_id, to_location_id, type, qty::float8 as qty, delta::float8 as delta, note, member_id, device_id, created_at, received_at from lager.movements where tenant_id = ${tid} and received_at > ${since}::timestamptz order by received_at asc limit ${PULL_MOV_LIMIT}`
         : await sql`select id, item_id, location_id, to_location_id, type, qty::float8 as qty, delta::float8 as delta, note, member_id, device_id, created_at, received_at from lager.movements where tenant_id = ${tid} and received_at > now() - interval '90 days' order by created_at desc limit 5000`;
+      // Mehr als eine Seite neuer Bewegungen: Cursor auf die letzte gelieferte setzen, Client holt den Rest
+      let more = false;
+      if (since && movements.length >= PULL_MOV_LIMIT) {
+        more = true;
+        serverTime = new Date(movements[movements.length - 1].received_at).toISOString();
+      }
       const members = await sql`select id, name, email, role, active from lager.members where tenant_id = ${tid}`;
       // Code-Reservierung mit abholen (spart einen Roundtrip)
       let codes_reserved: any = null;
       const want = Math.max(0, Math.min(200, Number(body.reserve_items) | 0));
       const wantLoc = Math.max(0, Math.min(50, Number(body.reserve_locations) | 0));
       if (want || wantLoc) codes_reserved = await reserve(tid, want, wantLoc);
-      return json({ ok: true, server_time: serverTime, full: !since,
+      return json({ ok: true, server_time: serverTime, full: !since, more,
         tenant: tenantOut(t), member: { id: me.id, role: me.role, name: me.name, email: me.email },
         items, item_codes: codes, locations, stock, movements, members, codes_reserved });
     }
@@ -400,14 +459,14 @@ Deno.serve(async (req: Request) => {
       const movs = Array.isArray(body.movements) ? body.movements.slice(0, 2000) : [];
       for (const l of locs) {
         if (!isAdmin) { out.locations.push({ id: String(l?.id || ""), ok: false, error: "forbidden" }); continue; }
-        out.locations.push(await upsertLocation(tid, l));
+        out.locations.push(await safeRec(l, () => upsertLocation(tid, l)));
       }
       if (items.length) {
         const cnt = await sql`select count(*)::int as n from lager.items where tenant_id = ${tid} and deleted = false`;
         let n = cnt[0].n as number;
         for (const it of items) {
           if (!isAdmin && it?.deleted === true) { out.items.push({ id: String(it?.id || ""), ok: false, error: "forbidden" }); continue; }
-          out.items.push(await upsertItem(tid, it, () => n < plan.items, () => { n++; }));
+          out.items.push(await safeRec(it, () => upsertItem(tid, it, () => n < plan.items, () => { n++; })));
         }
       }
       // Gültige Artikel-/Lagerort-IDs des Mandanten für Referenzprüfungen
@@ -425,8 +484,9 @@ Deno.serve(async (req: Request) => {
       const locIds = [...refLocIds].filter((x) => UUID_RE.test(x));
       if (itemIds.length) for (const r of await sql`select id from lager.items where tenant_id = ${tid} and id = any(${itemIds}::uuid[])`) okItems.add(String(r.id));
       if (locIds.length) for (const r of await sql`select id from lager.locations where tenant_id = ${tid} and id = any(${locIds}::uuid[])`) okLocs.add(String(r.id));
-      for (const r of icodes) out.item_codes.push(await upsertItemCode(tid, r, (id) => okItems.has(id)));
-      for (const m of movs) out.movements.push(await applyMovement(tid, me.id, deviceId, m, (id) => okItems.has(id), (id) => okLocs.has(id)));
+      const allowNeg = (t.settings || {}).negative_stock !== false;
+      for (const r of icodes) out.item_codes.push(await safeRec(r, () => upsertItemCode(tid, r, (id) => okItems.has(id))));
+      for (const m of movs) out.movements.push(await safeRec(m, () => applyMovement(tid, me.id, deviceId, m, (id) => okItems.has(id), (id) => okLocs.has(id), allowNeg)));
       const nowRow = await sql`select now() as t`;
       return json({ ok: true, results: out, server_time: (nowRow[0].t as Date).toISOString() });
     }
@@ -485,6 +545,10 @@ Deno.serve(async (req: Request) => {
       const role = body.role === "admin" ? "admin" : (body.role === "mitarbeiter" ? "mitarbeiter" : null);
       const active = typeof body.active === "boolean" ? body.active : null;
       if (role !== null) await sql`update lager.members set role = ${role}, updated_at = now() where id = ${mid}`;
+      if (active === true) {
+        const cnt = await sql`select count(*)::int as n from lager.members where tenant_id = ${tid} and active = true and id <> ${mid}`;
+        if (cnt[0].n >= plan.users) return json({ error: "limit_users", limit: plan.users }, 400);
+      }
       if (active !== null) await sql`update lager.members set active = ${active}, updated_at = now() where id = ${mid}`;
       return json({ ok: true });
     }

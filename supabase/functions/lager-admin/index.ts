@@ -51,7 +51,7 @@ function safeEqual(a: string, b: string) {
 }
 function ymd(v: unknown): string { if (!v) return ""; const s = v instanceof Date ? v.toISOString() : String(v); return s.slice(0, 10); }
 function dmy(v: unknown): string { const s = ymd(v); const p = s.split("-"); return p.length === 3 ? `${p[2]}.${p[1]}.${p[0]}` : s; }
-function todayYmd(): string { return new Date().toISOString().slice(0, 10); }
+function todayYmd(): string { return new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Berlin" }).format(new Date()); }
 function addDays(d: string, n: number): string { const x = new Date(d + "T00:00:00Z"); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); }
 function daysBetween(a: string, b: string): number { return Math.round((Date.parse(b + "T00:00:00Z") - Date.parse(a + "T00:00:00Z")) / 86400000); }
 function subState(t: any) {
@@ -150,6 +150,7 @@ Deno.serve(async (req: Request) => {
 
   let body: Record<string, any>;
   try { body = await req.json(); } catch { return json({ error: "bad_json" }, 400); }
+  if (!body || typeof body !== "object" || Array.isArray(body)) return json({ error: "bad_json" }, 400);
   const action = String(body?.action ?? "").trim();
 
   try {
@@ -240,12 +241,28 @@ Deno.serve(async (req: Request) => {
       if (!inv.length) return json({ error: "not_found" }, 404);
       if (inv[0].status === "paid") return json({ error: "already_paid" }, 400);
       const months = inv[0].period === "jahr" ? 12 : 1;
-      await sql.begin(async (tx: any) => {
-        await tx`update lager.invoices set status = 'paid', paid_at = now() where id = ${id}`;
+      const today = todayYmd();
+      const done = await sql.begin(async (tx: any) => {
+        // atomar: ein Doppelklick verlängert nicht doppelt
+        const claim = await tx`update lager.invoices set status = 'paid', paid_at = now() where id = ${id} and status <> 'paid' returning id`;
+        if (!claim.length) return false;
+        const cur = await tx`select plan, paid_until from lager.tenants where id = ${inv[0].tenant_id} for update`;
+        // Tarifwechsel: Restlaufzeit des alten Tarifs wertgleich in Tage des neuen umrechnen
+        let base = today;
+        const pu = ymd(cur[0].paid_until);
+        if (pu && pu > today) {
+          const oldP = PLANS[cur[0].plan], newP = PLANS[inv[0].plan];
+          const rest = daysBetween(today, pu);
+          const credit = (oldP && newP && cur[0].plan !== inv[0].plan && oldP.price.monat > 0 && newP.price.monat > 0)
+            ? Math.floor(rest * oldP.price.monat / newP.price.monat) : rest;
+          base = addDays(today, credit);
+        }
         await tx`update lager.tenants set plan = ${inv[0].plan}, status = 'aktiv',
-          paid_until = (greatest(coalesce(paid_until, current_date), current_date) + (${months}::int * interval '1 month'))::date,
+          paid_until = (${base}::date + (${months}::int * interval '1 month'))::date,
           updated_at = now() where id = ${inv[0].tenant_id}`;
+        return true;
       });
+      if (!done) return json({ error: "already_paid" }, 400);
       const t = await sql`select paid_until, contact_email, billing, name from lager.tenants where id = ${inv[0].tenant_id}`;
       const to = (t[0].billing && t[0].billing.email) || t[0].contact_email;
       if (to) {

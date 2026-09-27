@@ -63,6 +63,7 @@
     bad_qty: "Ungültige Menge.", item_not_found: "Artikel auf dem Server nicht gefunden (evtl. gelöscht).",
     location_not_found: "Lagerort auf dem Server nicht gefunden.", to_location_not_found: "Ziel-Lagerort nicht gefunden.",
     same_location: "Von- und Nach-Lagerort sind identisch.", bad_type: "Unbekannte Buchungsart.",
+    insufficient_stock: "Nicht genug Bestand – negativer Bestand ist in den Einstellungen gesperrt.", bad_value: "Ungültiger Wert (z. B. Zahl zu groß).",
     sku_exists: "Die Artikelnummer ist bereits vergeben.", barcode_exists: "Der Barcode ist bereits einem anderen Artikel zugeordnet.",
     code_exists: "Der Code ist bereits vergeben.", code_required: "Code fehlt.", name_required: "Name fehlt.", sku_required: "Artikelnummer fehlt.",
     bad_id: "Ungültige ID.", bad_plan: "Ungültiger Tarif.", cannot_edit_self: "Die eigene Rolle kann nicht geändert werden.",
