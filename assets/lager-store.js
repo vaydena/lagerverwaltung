@@ -29,7 +29,9 @@
       } catch (e) { resolve(undefined); }
     });
   }
+  var frozen = false;   // Tab hat an einen anderen Tab abgegeben: nichts mehr schreiben
   function kvSet(key, val) {
+    if (frozen) return Promise.resolve();
     if (memOnly || !db) { mem[key] = val; return Promise.resolve(); }
     return new Promise(function (resolve) {
       try {
@@ -44,6 +46,7 @@
   // Schreibfehler (z. B. Speicher voll) nicht still schlucken: die App zeigt einen Hinweis
   function writeFailed() { if (S.storageError !== "write") { S.storageError = "write"; emit("storage", "write"); } }
   function kvDel(key) {
+    if (frozen) return Promise.resolve();
     delete mem[key];
     if (memOnly || !db) return Promise.resolve();
     return new Promise(function (resolve) {
@@ -51,6 +54,7 @@
     });
   }
   function kvClear() {
+    if (frozen) return Promise.resolve();
     mem = {};
     if (memOnly || !db) return Promise.resolve();
     return new Promise(function (resolve) {
@@ -392,7 +396,7 @@
   function takeLocationCode() { var c = S.meta.reserved.locations.shift() || null; save("meta", true); return c; }
 
   window.LVStore = {
-    S: S, init: init, save: save, flush: flush, clearAll: clearAll, uuid: uuid, nowIso: nowIso, skey: skey, round3: round3,
+    S: S, init: init, save: save, flush: flush, freeze: function () { frozen = true; }, clearAll: clearAll, uuid: uuid, nowIso: nowIso, skey: skey, round3: round3,
     on: on, emit: emit,
     upsertItem: upsertItem, deleteItem: deleteItem, upsertLocation: upsertLocation, upsertCode: upsertCode, deleteCode: deleteCode,
     dropOutbox: dropOutbox, hasPendingChange: hasPendingChange, queue: queue,

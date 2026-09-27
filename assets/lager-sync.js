@@ -118,6 +118,19 @@
     return api("pull", payload, 90000).then(function (res) {
       if (handleCommon(res)) return { ok: false };
       var d = res.data;
+      // Betrieb gewechselt (z. B. aus Betrieb A entfernt, in Betrieb B eingeladen): lokale Daten des alten Betriebs verwerfen und vollständig neu laden
+      if (S.tenant && S.tenant.id && d.tenant && d.tenant.id && d.tenant.id !== S.tenant.id) {
+        Object.keys(S.images || {}).forEach(function (id) { LVStore.setImageCache(id, null); });
+        S.items = new Map(); S.locations = new Map(); S.codes = new Map(); S.stock = new Map(); S.movements = new Map();
+        S.lots = []; S.images = {}; S.outbox = [];
+        S.meta.since = null; S.meta.reserved = { items: [], locations: [] }; S.meta.last_used_location = null;
+        S.tenant = d.tenant; S.member = d.member || null; S.members = d.members || [];
+        LVStore.invalidate();
+        return LVStore.save(["tenant", "member", "members", "items", "codes", "locations", "stock", "movements", "outbox", "meta", "lots", "images"], true).then(function () {
+          LVStore.emit("change", { kind: "tenant" });
+          return { ok: true, more: true };
+        });
+      }
       S.tenant = d.tenant || S.tenant; S.member = d.member || S.member; S.members = d.members || S.members;
       if (d.full) {
         var keep = { item: new Map(), location: new Map(), item_code: new Map() };
@@ -178,6 +191,7 @@
 
   // ---------- Steuerung ----------
   function sync(reason) {
+    if (st.halted) return Promise.resolve({ halted: true });
     if (!navigator.onLine) { st.offline = true; emit(); return Promise.resolve({ offline: true }); }
     if (st.syncing) { again = true; return Promise.resolve({ busy: true }); }
     st.syncing = true; st.offline = false; st.phase = "start"; emit();
@@ -204,5 +218,7 @@
     return { pending: S.pending.length + (S.outbox.length - conflicts.length), conflicts: conflicts.length, failed: S.failed.length };
   }
 
-  window.LVSync = { st: st, sync: sync, schedule: schedule, start: start, api: api, counts: counts, handleCommon: handleCommon };
+  // Tab gibt an einen anderen Tab ab: keine weiteren Abgleiche
+  function halt() { st.halted = true; clearTimeout(timer); if (intervalId) { clearInterval(intervalId); intervalId = null; } }
+  window.LVSync = { st: st, sync: sync, schedule: schedule, start: start, halt: halt, api: api, counts: counts, handleCommon: handleCommon };
 })();

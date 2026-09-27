@@ -413,6 +413,7 @@
   }
   function nav(hash) { if (("#" + hash) === location.hash) route(); else location.hash = hash; }
   function route() {
+    if (!App.booted || App.tabBlocked) return;
     var r = parseHash(), def = NAV.filter(function (n) { return n.id === r.name; })[0];
     if (!VIEWS[r.name] || (def && def.admin && !isAdmin())) { location.replace("#scan"); return; }
     if (App.view && App.viewName !== r.name && App.view.unmount) { try { App.view.unmount(); } catch (e) { console.error(e); } }
@@ -546,6 +547,8 @@
     if (kind === "loading") h += '<div class="spinner"></div><p class="muted">Daten werden geladen …</p>';
     else if (kind === "offline") h += ic("offline") + '<h2>Offline</h2><p class="muted">Für den ersten Start wird einmalig eine Internetverbindung benötigt.</p><button class="btn primary" type="button" data-act="retry-first">Erneut versuchen</button>';
     else if (kind === "not_registered") h += ic("warn") + '<h2>Kein Betrieb zugeordnet</h2><p class="muted">Dieses Konto gehört zu keinem registrierten Betrieb. Bitte registrieren oder eine Einladung des Administrators nutzen.</p><div class="btnrow" style="justify-content:center"><a class="btn primary" href="registrieren.html">Registrieren</a><button class="btn ghost" type="button" data-act="logout">Abmelden</button></div>';
+    else if (kind === "tab_busy") h += ic("warn") + '<h2>Bereits in einem anderen Tab geöffnet</h2><p class="muted">Vaydena Lager läuft auf diesem Gerät schon in einem anderen Tab oder Fenster. Damit keine Buchungen verloren gehen, ist die App immer nur in einem Tab aktiv.</p><button class="btn primary" type="button" data-act="tab-takeover">Hier verwenden</button>';
+    else if (kind === "tab_moved") h += ic("warn") + '<h2>In anderem Tab geöffnet</h2><p class="muted">Die App wurde in einem anderen Tab übernommen. Alle Daten sind gespeichert.</p><button class="btn primary" type="button" data-act="tab-takeover">Wieder hier verwenden</button>';
     else if (kind === "member_inactive") h += ic("warn") + '<h2>Zugang deaktiviert</h2><p class="muted">Dein Zugang wurde deaktiviert. Bitte an den Administrator wenden.</p><button class="btn ghost" type="button" data-act="logout">Abmelden</button>';
     else h += ic("warn") + '<h2>Laden fehlgeschlagen</h2><p class="muted">' + esc(extra || "Bitte erneut versuchen.") + '</p><div class="btnrow" style="justify-content:center"><button class="btn primary" type="button" data-act="retry-first">Erneut versuchen</button><button class="btn ghost" type="button" data-act="logout">Abmelden</button></div>';
     el.innerHTML = h + '</div></div>';
@@ -583,19 +586,67 @@
   }
   function bindGlobal() {
     LVStore.on("change", function (evt) {
+      if (App.tabBlocked) return;
       if (!App.booted) { if (evt && evt.kind === "pull" && S.tenant && S.member) firstRender(); return; }
       if (evt && evt.kind === "push" && evt.rejected) toast(evt.rejected + " Buchung" + (evt.rejected === 1 ? "" : "en") + " vom Server abgelehnt – siehe Journal.", "err", 4500);
+      if (evt && evt.kind === "tenant") {
+        scanReset(); App.inv = { loc: "", counts: {}, extra: [], zero: false }; App.scan.loc = null;
+        toast("Du bist jetzt einem anderen Betrieb zugeordnet – Daten werden neu geladen.", "warn", 5000);
+        renderNav(); nav("scan"); return;
+      }
       if (evt && evt.kind === "pull") renderNav();
       renderBanners(); renderSyncdot(); refresh(evt);
     });
     LVStore.on("storage", function (err) { if (!App.booted) return; renderBanners(); if (err === "write") toast("Daten konnten auf dem Gerät nicht gespeichert werden.", "err", 5000); });
-    LVStore.on("sync", function () { renderSyncdot(); if (App.booted) renderBanners(); if (App.booted && App.viewName === "konto" && !LVSync.st.syncing) softRender(); });
+    LVStore.on("sync", function () { if (App.tabBlocked) return; renderSyncdot(); if (App.booted) renderBanners(); if (App.booted && App.viewName === "konto" && !LVSync.st.syncing) softRender(); });
   }
+  // ---------- Nur ein aktiver Tab: jeder Tab hält den Datenstand im Speicher und schreibt ihn komplett zurück.
+  // Zwei gleichzeitig aktive Tabs würden sich gegenseitig offene Buchungen überschreiben.
+  var tab = { bc: null, state: "probe", seen: false, go: null };
+  function tabGuard(go) {
+    try { tab.bc = new BroadcastChannel("vaydena-lager"); } catch (e) { tab.bc = null; }
+    if (!tab.bc) { tab.state = "active"; go(); return; }
+    tab.go = go;
+    tab.bc.onmessage = function (ev) {
+      var m = ev.data || {};
+      if (m.t === "hello" && (tab.state === "active" || tab.state === "claim")) tab.bc.postMessage({ t: "busy" });
+      else if (m.t === "busy" && tab.state === "probe") tab.seen = true;
+      else if (m.t === "takeover" && tab.state === "active") tabRelease();
+      else if (m.t === "released" && tab.state === "claim") tabActivate();
+    };
+    tab.bc.postMessage({ t: "hello" });
+    setTimeout(function () {
+      if (tab.state !== "probe") return;
+      if (tab.seen) { tab.state = "blocked"; App.tabBlocked = true; splash("tab_busy"); } else tabActivate();
+    }, 350);
+  }
+  function tabActivate() {
+    if (tab.state === "active") return;
+    var first = !tab.started; tab.state = "active"; tab.started = true; App.tabBlocked = false;
+    if (first) tab.go(); else location.reload();
+  }
+  function tabRelease() {
+    tab.state = "blocked"; App.tabBlocked = true;
+    try { LVScan.stop(); } catch (e) {}
+    LVSync.halt();
+    closeModal(true); closeOverlay();
+    var done = function () { LVStore.freeze(); tab.bc.postMessage({ t: "released" }); splash("tab_moved"); };
+    LVStore.flush().then(done, done);
+  }
+  ACTIONS["tab-takeover"] = function (el) {
+    if (el) el.disabled = true;
+    tab.state = "claim"; tab.bc.postMessage({ t: "takeover" });
+    setTimeout(function () { if (tab.state === "claim") tabActivate(); }, 2500);   // anderer Tab eingefroren/geschlossen
+  };
   function boot() {
     var sess = LV.storedSession();
     if (!sess || !sess.user) { LV.requireSession("app.html" + location.search + location.hash); return; }
     App.userId = sess.user.id; App.userEmail = sess.user.email || "";
-    bindEvents(); bindGlobal();
+    bindEvents();
+    tabGuard(bootData);
+  }
+  function bootData() {
+    bindGlobal();
     LVStore.init(App.userId).then(function () {
       LVSync.start();
       if (S.tenant && S.member) { firstRender(); LVSync.sync("boot"); return; }
@@ -674,7 +725,9 @@
         (hint ? '<div class="hint">' + hint + '</div>' : "") + '</div>' +
         scanLotHtml(it) +
         '<div class="field"><label>Notiz (optional)</label><input id="scanNote" type="text" maxlength="200" value="' + esc(sc.note) + '" data-input="scan-note" data-enter="book" placeholder="z. B. Lieferschein 4711"></div>' +
-        '<div class="btnrow"><button class="btn primary lg" type="button" data-act="book">' + esc(typeLabel(sc.type)) + ' buchen</button><button class="btn ghost" type="button" data-act="scan-clear">Abbrechen</button></div></div>';
+        '<div class="btnrow"><button class="btn primary lg" type="button" data-act="book">' + esc(typeLabel(sc.type)) + ' buchen</button>' +
+        (sc.type === "out" ? '<button class="btn ghost" type="button" data-act="pick-add">' + ic("cart") + ' Zur Pickliste</button>' : "") +
+        '<button class="btn ghost" type="button" data-act="scan-clear">Abbrechen</button></div></div>';
     } else {
       var n = LVStore.itemCount();
       h = '<div class="card"><p class="note" style="margin:0">' + (n ? "Artikel scannen oder oben suchen. Lagerort-Codes setzen den Buchungsort." : "Noch keine Artikel vorhanden. Unter <a href=\"#artikel\">Artikel</a> anlegen oder per CSV importieren.") + '</p></div>';
@@ -712,18 +765,18 @@
       return '<div class="ph"><h1>Scannen &amp; Buchen</h1><div class="spacer"></div><a class="btn ghost sm" href="#journal">Journal</a></div>' +
         '<div class="scanbox" id="scanbox"></div>' +
         '<form class="coderow" data-form="scan-code" autocomplete="off"><input id="codeIn" type="search" placeholder="Code, Artikelnummer oder Name eingeben …" data-input="scan-search" autocomplete="off" enterkeyhint="go"><button class="btn primary" type="submit">OK</button></form>' +
-        '<div class="quick hide" id="quick"></div><div id="scanResult"></div>' +
+        '<div class="quick hide" id="quick"></div><div id="scanResult"></div><div id="pickList"></div>' +
         '<h3 class="sh">Zuletzt gebucht</h3><div class="list" id="scanRecent"></div>';
     },
     mount: function () {
-      renderScanbox("scanbox", "scanReader", false); renderScanResult(); renderScanRecent();
+      renderScanbox("scanbox", "scanReader", false); renderScanResult(); renderPick(); renderScanRecent();
       if (App.scan.queued) { var c = App.scan.queued; App.scan.queued = null; onScanCode(c, "wedge"); }
       if (camPref() && LVScan.supported()) startCam("scanbox", "scanReader", this.cam.handler);
       var inp = byId("codeIn");
       if (inp && !App.scan.item && window.matchMedia && matchMedia("(pointer:fine)").matches) inp.focus();
     },
     unmount: function () { LVScan.stop(); App.cam.on = false; },
-    update: function () { var a = document.activeElement, r = byId("scanResult"); if (!(r && a && r.contains(a))) renderScanResult(); renderScanRecent(); },
+    update: function () { var a = document.activeElement, r = byId("scanResult"); if (!(r && a && r.contains(a))) renderScanResult(); renderPick(); renderScanRecent(); },
     onWedge: function (code) { onScanCode(code, "wedge"); }
   };
   INPUTS["scan-search"] = function (el) {
@@ -800,6 +853,73 @@
       sc.qty = 1; sc.note = ""; sc.lot = ""; sc.bb = ""; renderScanResult(); renderScanRecent(); LVSync.schedule(600);
       var i = byId("codeIn"); if (i && window.matchMedia && matchMedia("(pointer:fine)").matches) i.focus();
     }, function (e) { sc.busy = false; toast("Buchung konnte nicht gespeichert werden: " + (e && e.message || e), "err", 5000); });
+  };
+
+  // ---------- Pickliste: mehrere Ausgänge sammeln und gemeinsam buchen (lokal im Browser je Mandant) ----------
+  function pickKey() { return "lv_pick_" + ((S.tenant && S.tenant.id) || "x"); }
+  function pickLoad() {
+    var arr; try { arr = JSON.parse(localStorage.getItem(pickKey()) || "[]"); } catch (e) { arr = []; }
+    return Array.isArray(arr) ? arr.filter(function (p) { return p && S.items.get(p.item_id) && S.locations.get(p.loc) && p.qty > 0; }) : [];
+  }
+  function pickSave(arr) { try { if (arr.length) localStorage.setItem(pickKey(), JSON.stringify(arr)); else localStorage.removeItem(pickKey()); } catch (e) {} }
+  function renderPick() {
+    var box = byId("pickList"); if (!box) return;
+    var arr = pickLoad();
+    if (!arr.length) { box.innerHTML = ""; return; }
+    var h = '<h3 class="sh">Pickliste (' + arr.length + ')</h3><div class="list picklist">';
+    arr.forEach(function (p, i) {
+      var it = S.items.get(p.item_id), loc = S.locations.get(p.loc), cur = LVStore.qtyAt(it.id, loc.id);
+      h += '<div class="row"><span class="ic out">' + ic("cart") + '</span><div class="txt"><div class="t">' + esc(it.name) + '</div><div class="s">' + esc(loc.code + " · " + loc.name) +
+        (p.lot || p.bb ? " · " + esc(p.lot || "") + (p.bb ? " MHD " + esc(fmtBB(p.bb)) : "") : "") + " · verfügbar " + esc(fmtQty(cur)) + '</div></div>' +
+        '<div class="q' + (p.qty > cur ? " neg" : "") + '">' + esc(fmtQty(p.qty)) + '<small>' + esc(unitOf(it)) + '</small></div>' +
+        '<button class="iconbtn" type="button" data-act="pick-del" data-i="' + i + '" aria-label="' + esc(it.name) + ' von der Pickliste entfernen">' + ic("x") + '</button></div>';
+    });
+    h += '<div class="foot"><button class="btn primary" type="button" data-act="pick-book">Alle ' + arr.length + ' buchen</button><button class="btn ghost" type="button" data-act="pick-clear">Liste leeren</button></div></div>';
+    box.innerHTML = h;
+  }
+  ACTIONS["pick-add"] = function () {
+    var sc = App.scan, it = sc.item; if (!it) return;
+    var q = parseQty(byId("scanQty") ? byId("scanQty").value : sc.qty);
+    if (q == null || q <= 0 || q > 1e9) { toast("Die Menge muss größer als 0 sein.", "err"); return; }
+    if (!sc.loc || !S.locations.get(sc.loc)) { toast("Bitte einen Lagerort wählen.", "err"); return; }
+    var arr = pickLoad(), lot = sc.lot || "", bb = sc.bb || "", hit = null;
+    arr.forEach(function (p) { if (p.item_id === it.id && p.loc === sc.loc && (p.lot || "") === lot && (p.bb || "") === bb) hit = p; });
+    if (hit) hit.qty = LVStore.round3(hit.qty + q);
+    else arr.push({ item_id: it.id, loc: sc.loc, qty: q, lot: lot, bb: bb, note: (byId("scanNote") ? byId("scanNote").value : sc.note).trim() });
+    pickSave(arr);
+    toast("Zur Pickliste: " + fmtQty(q) + " " + unitOf(it) + " · " + it.name, "ok");
+    scanReset(); renderScanResult(); renderPick();
+    var i = byId("codeIn"); if (i && window.matchMedia && matchMedia("(pointer:fine)").matches) i.focus();
+  };
+  ACTIONS["pick-del"] = function (el) { var arr = pickLoad(); arr.splice(Number(el.getAttribute("data-i")), 1); pickSave(arr); renderPick(); };
+  ACTIONS["pick-clear"] = function () { confirmDlg("Pickliste leeren? Es wird nichts gebucht.", { ok: "Leeren" }).then(function (ok) { if (ok) { pickSave([]); renderPick(); } }); };
+  ACTIONS["pick-book"] = function (el) {
+    var arr = pickLoad(); if (!arr.length || App.scan.busy) return;
+    // Bedarf je Artikel+Lagerort summieren, damit der Bestand nicht mehrfach „verfügbar“ gerechnet wird
+    var need = {}, short = [];
+    arr.forEach(function (p) { var k = p.item_id + "|" + p.loc; need[k] = LVStore.round3((need[k] || 0) + p.qty); });
+    Object.keys(need).forEach(function (k) { var a = k.split("|"), cur = LVStore.qtyAt(a[0], a[1]); if (need[k] > cur) short.push(S.items.get(a[0]).name); });
+    if (short.length && !negAllowed()) { toast("Nicht genug Bestand für: " + short.join(", ") + ". Negativer Bestand ist deaktiviert.", "err", 5000); return; }
+    function go() {
+      App.scan.busy = true; if (el) el.disabled = true;
+      var now = Date.now(), chain = Promise.resolve();
+      arr.forEach(function (p, i) {
+        chain = chain.then(function () {
+          return LVStore.addPending({ id: LVStore.uuid(), item_id: p.item_id, location_id: p.loc, to_location_id: null, type: "out", qty: p.qty,
+            note: p.note || "Pickliste", lot: p.lot || null, best_before: p.bb || null, member_id: S.member ? S.member.id : null,
+            device_id: S.meta.device_id, created_at: new Date(now + i).toISOString() }).then(function () { arr[i] = null; });
+        });
+      });
+      chain.then(function () {
+        App.scan.busy = false; pickSave([]); renderPick(); renderScanRecent(); LVSync.schedule(600);
+        toast(arr.length + " Ausgänge gebucht.", short.length ? "warn" : "ok");
+      }, function (e) {
+        App.scan.busy = false; pickSave(arr.filter(Boolean)); renderPick(); renderScanRecent();
+        toast("Buchung konnte nicht gespeichert werden: " + (e && e.message || e), "err", 5000);
+      });
+    }
+    if (short.length) confirmDlg("Bestand wird negativ für: " + short.join(", ") + ". Trotzdem buchen?", { ok: "Buchen" }).then(function (ok) { if (ok) go(); });
+    else go();
   };
 
   // =====================================================================
