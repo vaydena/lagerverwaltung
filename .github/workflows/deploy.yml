@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Repo auschecken
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       # Solange das Passwort-Secret fehlt, wird NICHT deployt (Lauf bleibt gruen).
       # Liegt FTP_PASSWORD stattdessen als VARIABLE vor (Tab "Variables" statt "Secrets"):
