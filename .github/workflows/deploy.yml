@@ -159,18 +159,36 @@ jobs:
           echo "Alle $n Dateien hochgeladen -> /$FTPDIR/"
 
       # Live-Pruefung ueber HTTPS (mit Cache-Buster): Startseiten-Titel, App-Shell, Marker.
+      # Sperrt der Hostinger-Bot-Schutz den Runner aus ("Checking your browser ..."),
+      # wird bis zu 3x erneut versucht; bleibt es gesperrt, gibt es nur eine Warnung,
+      # denn der Upload selbst wurde oben bereits Datei fuer Datei bestaetigt.
       - name: Verify (HTTPS)
         if: steps.guard.outputs.ready == 'true'
         env:
           SITE: https://lagerverwaltung.vaydena.de
+          UA: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36 vaydena-deploy-check"
         run: |
-          bad=0
-          want=$(grep -o '<title>[^<]*</title>' index.html | head -1)
-          have=$(curl -s "$SITE/index.html?cb=$RANDOM" | grep -o '<title>[^<]*</title>' | head -1)
-          echo "index.html Titel: lokal=$want live=$have"; [ "$want" = "$have" ] || bad=1
-          for f in app.html anmelden.html registrieren.html betreiber.html zahlung.html assets/app.css assets/lager.css assets/lager-app.js assets/lager-store.js sw.js manifest.webmanifest deploy-version.txt; do
-            loc=$(stat -c %s "$f"); res=$(curl -s -o /dev/null -w '%{http_code} %{size_download}' "$SITE/$f?cb=$RANDOM")
-            echo "$f: lokal=$loc live=$res"; [ "$res" = "200 $loc" ] || bad=1
+          body=$(mktemp)
+          challenge='Checking your browser|Just a moment|cf-chl|captcha'
+          check() {
+            bad=0; blocked=0
+            want=$(grep -o '<title>[^<]*</title>' index.html | head -1)
+            code=$(curl -s -A "$UA" -o "$body" -w '%{http_code}' "$SITE/index.html?cb=$RANDOM")
+            have=$(grep -o '<title>[^<]*</title>' "$body" | head -1)
+            echo "index.html Titel: lokal=$want live=$code $have"
+            if grep -Eqi "$challenge" "$body"; then blocked=$((blocked+1)); elif [ "$want" != "$have" ]; then bad=1; fi
+            for f in app.html anmelden.html registrieren.html betreiber.html zahlung.html assets/app.css assets/lager.css assets/lager-app.js assets/lager-store.js sw.js manifest.webmanifest deploy-version.txt; do
+              loc=$(stat -c %s "$f"); res=$(curl -s -A "$UA" -o "$body" -w '%{http_code} %{size_download}' "$SITE/$f?cb=$RANDOM")
+              echo "$f: lokal=$loc live=$res"
+              if [ "$res" = "200 $loc" ]; then continue; fi
+              if [ "${res%% *}" != "200" ] && grep -Eqi "$challenge" "$body"; then blocked=$((blocked+1)); else bad=1; fi
+            done
+          }
+          for try in 1 2 3; do
+            check
+            if [ $bad -ne 0 ]; then echo "::error::Live-Stand weicht ab (siehe oben)."; exit 1; fi
+            if [ $blocked -eq 0 ]; then echo "Live-Stand verifiziert."; exit 0; fi
+            echo "Bot-Schutz des Hosters hat $blocked Abrufe blockiert (Versuch $try/3)."
+            [ $try -lt 3 ] && sleep 30
           done
-          if [ $bad -ne 0 ]; then echo "::error::Live-Stand weicht ab (siehe oben)."; exit 1; fi
-          echo "Live-Stand verifiziert."
+          echo "::warning::Live-Pruefung vom Bot-Schutz des Hosters blockiert - Upload war erfolgreich, bitte Seite kurz im Browser pruefen."
