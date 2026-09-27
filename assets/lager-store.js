@@ -121,8 +121,16 @@
       return kvGet("meta");
     }).then(function (meta) {
       if (meta && meta.user_id && userId && meta.user_id !== userId) {
-        // anderer Nutzer auf diesem Gerät -> lokale Daten gehören ihm nicht
-        return kvClear().then(function () { return null; });
+        // anderer Nutzer auf diesem Gerät -> lokale Daten gehören ihm nicht.
+        // Nicht übertragene Buchungen/Änderungen des Vorgängers aber zurücklegen (gemeinsame Lager-Handys),
+        // sie kommen bei seiner nächsten Anmeldung wieder in die Warteschlange.
+        var old = meta.user_id;
+        return Promise.all([kvGet("pending"), kvGet("outbox"), kvGet("failed"), kvGet("parked")]).then(function (r) {
+          var parked = r[3] || {}, p = parked[old] || { pending: [], outbox: [], failed: [] };
+          p.pending = p.pending.concat(r[0] || []); p.outbox = p.outbox.concat(r[1] || []); p.failed = p.failed.concat(r[2] || []);
+          if (p.pending.length || p.outbox.length || p.failed.length) parked[old] = p;
+          return kvClear().then(function () { return kvSet("parked", parked); }).then(function () { return null; });
+        });
       }
       return meta || null;
     }).then(function (meta) {
@@ -139,8 +147,20 @@
       S.stock = fromArr(r[6], function (x) { return skey(x.item_id, x.location_id); });
       S.movements = fromArr(r[7], function (x) { return x.id; });
       S.pending = r[8] || []; S.outbox = r[9] || []; S.failed = r[10] || [];
+      return kvGet("parked");
+    }).then(function (parked) {
+      var mine = parked && S.meta.user_id && parked[S.meta.user_id];
+      var restore = Promise.resolve();
+      if (mine) {
+        // zurückgelegte Daten dieses Nutzers wieder einreihen (Buchungen sind per ID idempotent)
+        var ids = {}; S.pending.forEach(function (m) { ids[m.id] = true; });
+        S.pending = S.pending.concat(mine.pending.filter(function (m) { return !ids[m.id]; }));
+        S.outbox = S.outbox.concat(mine.outbox); S.failed = S.failed.concat(mine.failed);
+        delete parked[S.meta.user_id];
+        restore = kvSet("parked", parked).then(function () { return save(["pending", "outbox", "failed"], true); });
+      }
       S.ready = true; effCache = null;
-      return save("meta", true);
+      return restore.then(function () { return save("meta", true); });
     });
   }
   function clearAll() {
@@ -150,7 +170,10 @@
     S.pending = []; S.outbox = []; S.failed = [];
     S.meta = { user_id: S.meta.user_id, since: null, device_id: dev, reserved: { items: [], locations: [] }, last_sync: null, last_used_location: null };
     dirty = {}; effCache = null;
-    return kvClear().then(function () { return save("meta", true); });
+    // zurückgelegte Buchungen anderer Nutzer dieses Geräts nicht mitlöschen
+    return kvGet("parked").then(function (parked) {
+      return kvClear().then(function () { return parked && Object.keys(parked).length ? kvSet("parked", parked) : null; });
+    }).then(function () { return save("meta", true); });
   }
 
   // ---------- Stammdaten (lokale Änderungen -> Outbox) ----------

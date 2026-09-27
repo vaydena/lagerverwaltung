@@ -77,6 +77,9 @@
   }
   var nf = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 3 });
   function fmtQty(n) { return nf.format(LVStore.round3(n)); }
+  // Für Eingabefelder und CSV: ohne Tausenderpunkt, sonst liest parseQty "1.000" als 1
+  var nfIn = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 3, useGrouping: false });
+  function fmtIn(n) { return nfIn.format(LVStore.round3(n)); }
   function pad(n) { return (n < 10 ? "0" : "") + n; }
   function fmtDate(iso) { if (!iso) return ""; var d = new Date(iso); if (isNaN(d)) return ""; return pad(d.getDate()) + "." + pad(d.getMonth() + 1) + "." + d.getFullYear() + " " + pad(d.getHours()) + ":" + pad(d.getMinutes()); }
   function fmtDay(iso) { if (!iso) return ""; var d = new Date(iso); if (isNaN(d)) return ""; return pad(d.getDate()) + "." + pad(d.getMonth() + 1) + "." + d.getFullYear(); }
@@ -198,6 +201,7 @@
   }
   ACTIONS["confirm-ok"] = function () { if (App.modal && App.modal._confirm) App.modal._confirm(); };
   ACTIONS["modal-close"] = function () { closeModal(); };
+  ACTIONS["welcome-new-item"] = function () { closeModal(); nav("artikel/neu"); };
   ACTIONS["modal-bg"] = function (el, e) { if (e && e.target === el) closeModal(); };
 
   function pickItem(title, onPick) {
@@ -230,6 +234,7 @@
     if (v == null) v = "";
     if (typeof v === "number") v = String(v).replace(".", ",");
     v = String(v);
+    if (/^[=+\-@\t\r]/.test(v) && !/^-?\d+(,\d+)?$/.test(v)) v = "'" + v; // Excel-Formeln entschärfen, Zahlen nicht
     return /[;"\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
   }
   function csvText(rows) { return "\ufeff" + rows.map(function (r) { return r.map(csvCell).join(";"); }).join("\r\n") + "\r\n"; }
@@ -264,7 +269,7 @@
   function movRow(m, o) {
     o = o || {};
     var it = S.items.get(m.item_id), name = it ? it.name : "gelöschter Artikel", unit = unitOf(it);
-    var sub = typeLabel(m.type) + " · " + locShort(m.location_id) + (m.type === "transfer" ? " → " + locShort(m.to_location_id) : "");
+    var sub = esc(typeLabel(m.type)) + " · " + esc(locShort(m.location_id)) + (m.type === "transfer" ? " → " + esc(locShort(m.to_location_id)) : "");
     if (o.showItem !== false && it) sub = esc(it.sku) + " · " + sub;
     if (m.note) sub += " · " + esc(m.note);
     if (o.who !== false && m.member_id) sub += " · " + esc(nameOfMember(m.member_id));
@@ -535,7 +540,7 @@
         '<div class="obstep"><div class="n">2</div><div><b>Artikel anlegen oder importieren</b><span>Einzeln oder per CSV-Import (z. B. aus Excel) unter <em>Artikel</em>.</span></div></div>' +
         '<div class="obstep"><div class="n">3</div><div><b>Etiketten drucken</b><span>QR-Codes oder Barcodes für Artikel und Lagerorte unter <em>Etiketten</em>.</span></div></div>' +
         '<div class="obstep"><div class="n">4</div><div><b>Scannen &amp; buchen</b><span>Eingang, Ausgang, Umlagerung und Zählung – auch offline.</span></div></div></div>',
-      foot: '<a class="btn ghost" href="#artikel/neu" data-act="modal-close">Ersten Artikel anlegen</a><button class="btn primary" type="button" data-act="modal-close">Los geht’s</button>'
+      foot: '<a class="btn ghost" href="#artikel/neu" data-act="welcome-new-item">Ersten Artikel anlegen</a><button class="btn primary" type="button" data-act="modal-close">Los geht’s</button>'
     });
   }
   function bindGlobal() {
@@ -616,9 +621,9 @@
       var it = sc.item, unit = unitOf(it), q = parseQty(sc.qty), hint = "";
       var cur = sc.loc ? LVStore.qtyAt(it.id, sc.loc) : 0;
       if (q != null) {
-        if (sc.type === "in") hint = "Bestand danach: " + fmtQty(cur + q) + " " + unit;
-        else if (sc.type === "count") hint = "Aktuell " + fmtQty(cur) + " " + unit + " · Differenz " + (q - cur >= 0 ? "+" : "") + fmtQty(q - cur);
-        else hint = "Verfügbar: " + fmtQty(cur) + " " + unit + (q > cur ? " · <b style=\"color:#a32020\">Bestand wird negativ</b>" : "");
+        if (sc.type === "in") hint = "Bestand danach: " + fmtQty(cur + q) + " " + esc(unit);
+        else if (sc.type === "count") hint = "Aktuell " + fmtQty(cur) + " " + esc(unit) + " · Differenz " + (q - cur >= 0 ? "+" : "") + fmtQty(q - cur);
+        else hint = "Verfügbar: " + fmtQty(cur) + " " + esc(unit) + (q > cur ? " · <b style=\"color:#a32020\">Bestand wird negativ</b>" : "");
       }
       h = '<div class="card rescard"><div class="head"><div><div class="name">' + esc(it.name) + '</div><div class="code">' + esc(it.sku) + (it.barcode ? " · " + esc(it.barcode) : "") + (it.category ? " · " + esc(it.category) : "") + '</div></div>' +
         '<a class="iconbtn" href="#artikel/' + esc(it.id) + '" aria-label="Artikel öffnen">' + ic("info") + '</a><button class="iconbtn" type="button" data-act="scan-clear" aria-label="Schließen">' + ic("x") + '</button></div>' +
@@ -626,7 +631,7 @@
         '<div class="seg">' + ["in", "out", "transfer", "count"].map(function (t) { return '<button type="button" data-act="scan-type" data-v="' + t + '"' + (sc.type === t ? ' class="on"' : "") + '>' + typeLabel(t) + '</button>'; }).join("") + '</div>' +
         '<div class="' + (sc.type === "transfer" ? "f2" : "") + '"><div class="field"><label>' + (sc.type === "transfer" ? "Von" : "Lagerort") + '</label><select data-change="scan-loc">' + locOptions(sc.loc, null, "– Lagerort wählen –") + '</select></div>' +
         (sc.type === "transfer" ? '<div class="field"><label>Nach</label><select data-change="scan-to">' + locOptions(sc.to, sc.loc, "– Ziel wählen –") + '</select></div>' : "") + '</div>' +
-        '<div class="field"><label>' + (sc.type === "count" ? "Gezählte Menge" : "Menge") + '</label><div class="stepper"><button type="button" data-act="scan-minus" aria-label="weniger">−</button><input id="scanQty" type="text" inputmode="decimal" value="' + esc(fmtQty(sc.qty)) + '" data-input="scan-qty" data-enter="book" autocomplete="off"><button type="button" data-act="scan-plus" aria-label="mehr">+</button><span class="unit">' + esc(unit) + '</span></div>' +
+        '<div class="field"><label>' + (sc.type === "count" ? "Gezählte Menge" : "Menge") + '</label><div class="stepper"><button type="button" data-act="scan-minus" aria-label="weniger">−</button><input id="scanQty" type="text" inputmode="decimal" value="' + esc(typeof sc.qty === "number" ? fmtIn(sc.qty) : String(sc.qty == null ? "" : sc.qty)) + '" data-input="scan-qty" data-enter="book" autocomplete="off"><button type="button" data-act="scan-plus" aria-label="mehr">+</button><span class="unit">' + esc(unit) + '</span></div>' +
         (hint ? '<div class="hint">' + hint + '</div>' : "") + '</div>' +
         '<div class="field"><label>Notiz (optional)</label><input id="scanNote" type="text" maxlength="200" value="' + esc(sc.note) + '" data-input="scan-note" data-enter="book" placeholder="z. B. Lieferschein 4711"></div>' +
         '<div class="btnrow"><button class="btn primary lg" type="button" data-act="book">' + esc(typeLabel(sc.type)) + ' buchen</button><button class="btn ghost" type="button" data-act="scan-clear">Abbrechen</button></div></div>';
@@ -682,7 +687,7 @@
   function stepQty(d) {
     var q = parseQty(App.scan.qty); if (q == null) q = 0;
     q = LVStore.round3(q + d); if (q < 0) q = 0;
-    App.scan.qty = q; var i = byId("scanQty"); if (i) i.value = fmtQty(q); renderScanResult();
+    App.scan.qty = q; var i = byId("scanQty"); if (i) i.value = fmtIn(q); renderScanResult();
   }
   ACTIONS["scan-minus"] = function () { stepQty(-1); };
   ACTIONS["scan-plus"] = function () { stepQty(1); };
@@ -694,11 +699,18 @@
     });
   };
   ACTIONS["scan-loc-stock"] = function () { if (App.scan.locInfo) { App.f.bestand.loc = App.scan.locInfo.id; scanReset(); nav("bestand"); } };
-  ACTIONS["scan-loc-inv"] = function () { if (App.scan.locInfo) { App.inv.loc = App.scan.locInfo.id; scanReset(); nav("inventur"); } };
+  ACTIONS["scan-loc-inv"] = function () {
+    var loc = App.scan.locInfo; if (!loc) return;
+    function go() { App.inv.loc = loc.id; App.inv.counts = {}; App.inv.extra = []; scanReset(); nav("inventur"); }
+    if (App.inv.loc && App.inv.loc !== loc.id && Object.keys(App.inv.counts || {}).length) confirmDlg("Bisherige Zählwerte verwerfen und die Inventur für " + loc.code + " · " + loc.name + " starten?", { ok: "Wechseln" }).then(function (ok) { if (ok) go(); });
+    else go();
+  };
   ACTIONS["book"] = function () {
     var sc = App.scan, it = sc.item; if (!it) return;
-    var raw = byId("scanQty") ? byId("scanQty").value : sc.qty, q = parseQty(raw);
-    if (q == null && String(raw).trim()) { var r = LVStore.resolveCode(raw); if (r) { onScanCode(String(raw).trim(), "wedge"); return; } }
+    if (sc.busy) return;
+    var raw = byId("scanQty") ? byId("scanQty").value : sc.qty, q = parseQty(raw), rawT = String(raw).trim();
+    // Handscanner tippt in das fokussierte Mengenfeld: ein bekannter Code geht vor, auch eine rein numerische EAN (ab 6 Ziffern)
+    if (rawT && (q == null || /^\d{6,}$/.test(rawT)) && LVStore.resolveCode(rawT)) { onScanCode(rawT, "wedge"); return; }
     if (q == null) { toast("Bitte eine gültige Menge eingeben.", "err"); return; }
     if (!sc.loc || !S.locations.get(sc.loc)) { toast("Bitte einen Lagerort wählen.", "err"); return; }
     if (sc.type === "transfer" && (!sc.to || !S.locations.get(sc.to))) { toast("Bitte einen Ziel-Lagerort wählen.", "err"); return; }
@@ -709,11 +721,13 @@
     var m = { id: LVStore.uuid(), item_id: it.id, location_id: sc.loc, to_location_id: sc.type === "transfer" ? sc.to : null, type: sc.type, qty: q,
       note: (byId("scanNote") ? byId("scanNote").value : sc.note).trim() || null, member_id: S.member ? S.member.id : null, device_id: S.meta.device_id, created_at: LVStore.nowIso() };
     S.meta.last_used_location = sc.loc; LVStore.save("meta");
+    sc.busy = true;
     LVStore.addPending(m).then(function () {
+      sc.busy = false;
       toast(typeLabel(m.type) + " gebucht: " + fmtQty(q) + " " + unitOf(it) + " · " + it.name + (goesNeg ? " (Bestand negativ)" : ""), goesNeg ? "warn" : "ok");
       sc.qty = 1; sc.note = ""; renderScanResult(); renderScanRecent(); LVSync.schedule(600);
       var i = byId("codeIn"); if (i && window.matchMedia && matchMedia("(pointer:fine)").matches) i.focus();
-    });
+    }, function (e) { sc.busy = false; toast("Buchung konnte nicht gespeichert werden: " + (e && e.message || e), "err", 5000); });
   };
 
   // =====================================================================
@@ -820,7 +834,7 @@
         '<div class="f2"><div class="field"><label>Artikelnummer *</label><input name="sku" maxlength="40" required value="' + esc(it.sku) + '" autocomplete="off" data-noenter class="mono">' + (isNew ? '<div class="hint">Vorschlag aus dem Nummernblock – kann geändert werden.</div>' : "") + '</div>' +
         '<div class="field"><label>Einheit</label><input name="unit" maxlength="12" list="unitList" value="' + esc(it.unit || "") + '" placeholder="' + esc(settings().default_unit || "Stk") + '" autocomplete="off"><datalist id="unitList">' + ["Stk", "m", "kg", "l", "Pack", "Karton", "Paar", "Rolle"].map(function (u) { return '<option value="' + u + '">'; }).join("") + '</datalist></div></div>' +
         '<div class="field withbtn"><div><label>Barcode / EAN</label><input name="barcode" maxlength="80" value="' + esc(it.barcode || "") + '" autocomplete="off" data-noenter class="mono" inputmode="numeric"></div>' + (LVScan.supported() ? '<button class="btn ghost" type="button" data-act="item-scan-barcode" aria-label="Barcode scannen">' + ic("camera") + '</button>' : "") + '</div>' +
-        '<div class="f2"><div class="field"><label>Mindestbestand</label><input name="min_stock" type="text" inputmode="decimal" value="' + esc(Number(it.min_stock) > 0 ? fmtQty(it.min_stock) : "") + '" placeholder="0" autocomplete="off"><div class="hint">Warnung, wenn der Gesamtbestand darunter fällt.</div></div>' +
+        '<div class="f2"><div class="field"><label>Mindestbestand</label><input name="min_stock" type="text" inputmode="decimal" value="' + esc(Number(it.min_stock) > 0 ? fmtIn(it.min_stock) : "") + '" placeholder="0" autocomplete="off"><div class="hint">Warnung, wenn der Gesamtbestand darunter fällt.</div></div>' +
         '<div class="field"><label>Kategorie</label><input name="category" maxlength="60" list="catList" value="' + esc(it.category || "") + '" autocomplete="off"><datalist id="catList">' + cats.map(function (c) { return '<option value="' + esc(c) + '">'; }).join("") + '</datalist></div></div>' +
         '<div class="field"><label>Notiz</label><textarea name="note" rows="2" maxlength="500">' + esc(it.note || "") + '</textarea></div>' +
         (isNew ? "" : '<label class="check"><input type="checkbox" name="active"' + (it.active !== false ? " checked" : "") + '> Artikel aktiv (inaktive Artikel werden in Listen ausgeblendet)</label>') + '</form>',
@@ -1714,7 +1728,7 @@
         '<div class="f2"><div class="field"><label>Standard-Einheit</label><input name="default_unit" type="text" maxlength="12" value="' + esc(st.default_unit || "Stk") + '" placeholder="Stk"></div>' +
         '<div class="field"><label>Codeart auf Etiketten</label><select name="label_type"><option value="qr"' + (st.label_type !== "code128" ? " selected" : "") + '>QR-Code</option><option value="code128"' + (st.label_type === "code128" ? " selected" : "") + '>Barcode (Code 128)</option></select></div></div>' +
         '<div class="field"><label>Zusatzzeile auf Etiketten</label><input name="label_format" type="text" maxlength="40" value="' + esc(st.label_format || "") + '" placeholder="{firma}"><div class="hint">Platzhalter: {firma} {kategorie} {einheit} {sku} {name} {ean}</div></div>' +
-        '<label class="check"><input type="checkbox" name="negative_stock"' + (st.negative_stock ? " checked" : "") + '> Negativen Bestand zulassen (Ausgang auch buchen, wenn der Bestand nicht reicht)</label>' +
+        '<label class="check"><input type="checkbox" name="negative_stock"' + (st.negative_stock !== false ? " checked" : "") + '> Negativen Bestand zulassen (Ausgang auch buchen, wenn der Bestand nicht reicht)</label>' +
         '<div class="btnrow"><button class="btn primary" type="submit">Speichern</button></div></form></div>';
       h += '<div class="card"><h2>Daten</h2><p class="help">Alle Daten gehören dem Betrieb und lassen sich jederzeit exportieren.</p>' +
         '<div class="btnrow"><button class="btn ghost sm" type="button" data-act="items-csv">' + ic("download") + ' Artikelliste (CSV)</button><button class="btn ghost sm" type="button" data-act="export-json">' + ic("download") + ' Komplettexport (JSON)</button></div></div>';
@@ -1736,7 +1750,7 @@
   ACTIONS["items-csv"] = function () {
     var idx = stockIndex(), rows = [["Artikelnummer", "Bezeichnung", "EAN", "Einheit", "Mindestbestand", "Kategorie", "Notiz", "Bestand"]];
     LVStore.activeItems().sort(function (a, b) { return String(a.sku).localeCompare(String(b.sku), "de"); }).forEach(function (it) {
-      rows.push([it.sku, it.name, it.barcode || "", unitOf(it), fmtQty(it.min_stock || 0), it.category || "", it.note || "", fmtQty(idx.totals.get(it.id) || 0)]);
+      rows.push([it.sku, it.name, it.barcode || "", unitOf(it), LVStore.round3(it.min_stock || 0), it.category || "", it.note || "", LVStore.round3(idx.totals.get(it.id) || 0)]);
     });
     download("vaydena-lager-artikel-" + fileDate() + ".csv", csvText(rows), "text/csv");
   };

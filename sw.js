@@ -3,7 +3,7 @@
  * Supabase-/API-Aufrufe werden nie gecacht (fremder Origin -> gar nicht angefasst).
  * VERSION bei jedem Deploy erhöhen (siehe deploy-version.txt), dann tauscht der Browser den Cache aus.
  */
-var VERSION = "lv-2026-09-02-1";
+var VERSION = "lv-2026-09-27-1";
 var CACHE = "vaydena-lager-" + VERSION;
 var SHELL = [
   "app.html", "anmelden.html", "manifest.webmanifest",
@@ -65,7 +65,8 @@ function networkFirst(req, url, fallback) {
 function cacheFirst(req, url) {
   var key = cacheKey(url);
   return caches.match(key).then(function (cached) {
-    var net = fetch(req).then(function (res) { putCache(url, res); return res; }).catch(function () { return cached || Response.error(); });
+    // Hintergrund-Abruf am HTTP-Cache vorbei (.htaccess: max-age=86400), sonst bleibt die alte Datei bis zu 24 h
+    var net = fetch(req, { cache: "no-cache" }).then(function (res) { putCache(url, res); return res; }).catch(function () { return cached || Response.error(); });
     return cached || net;
   });
 }
