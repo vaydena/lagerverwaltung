@@ -2380,6 +2380,9 @@
     { k: "min_stock", label: "Mindestbestand", alias: ["mindestbestand", "minbestand", "mindest", "minimum", "min", "meldebestand", "minstock", "sollbestand"] },
     { k: "category", label: "Kategorie", alias: ["kategorie", "gruppe", "warengruppe", "category", "rubrik", "artikelgruppe"] },
     { k: "note", label: "Notiz", alias: ["notiz", "bemerkung", "note", "notes", "kommentar", "hinweis", "info"] },
+    { k: "supplier", label: "Lieferant", alias: ["lieferant", "lieferantenname", "supplier", "vendor", "bezugsquelle", "kreditor"] },
+    { k: "purchase_price", label: "Einkaufspreis (€)", alias: ["ekpreis", "einkaufspreis", "ek", "ekneu", "ekpreiseur", "einkaufspreiseur", "purchaseprice", "preis", "stueckpreis", "einzelpreis", "price", "kosten"] },
+    { k: "reorder_qty", label: "Bestellmenge", alias: ["bestellmenge", "nachbestellmenge", "mindestbestellmenge", "reorderqty", "ordermenge", "bestellmng", "losgroesse", "orderqty"] },
     { k: "qty", label: "Bestand (optional)", alias: ["bestand", "anfangsbestand", "menge", "stock", "qty", "quantity", "istbestand", "ist", "lagerbestand", "anzahl"] }
   ];
   function normHead(h) { return String(h || "").toLowerCase().replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss").replace(/[^a-z0-9]/g, ""); }
@@ -2416,8 +2419,15 @@
     r.onerror = function () { toast("Die Datei konnte nicht gelesen werden.", "err"); };
     r.readAsText(file, "utf-8");
   }
+  // Leer → null, ungültig oder negativ → false; "12,50 €" und "EUR 3" werden akzeptiert
+  function csvNum(v) {
+    var t = String(v || "").replace(/€|eur/gi, "").trim();
+    if (!t) return null;
+    var n = parseQty(t);
+    return n == null || n < 0 ? false : n;
+  }
   function csvPlan() {
-    var c = App.csv, map = c.map, plan = { items: [], newCount: 0, updCount: 0, skip: 0, skipNoName: 0, skipExisting: 0, dupInFile: 0, codeNeeded: 0, barcodeClash: 0, qtyRows: 0 };
+    var c = App.csv, map = c.map, plan = { items: [], newCount: 0, updCount: 0, skip: 0, skipNoName: 0, skipExisting: 0, dupInFile: 0, codeNeeded: 0, barcodeClash: 0, qtyRows: 0, badNum: 0 };
     if (!c || map.name == null) return plan;
     var bySku = new Map();
     S.items.forEach(function (it) { if (!it.deleted && it.sku) bySku.set(String(it.sku).toLowerCase(), it); });
@@ -2431,7 +2441,9 @@
       if (sku) seenSku[key] = true;
       var ex = sku ? bySku.get(key) : null;
       if (ex && !c.update) { plan.skip++; plan.skipExisting++; return; }
-      var rec = { line: idx + 2, existing: ex || null, sku: sku.slice(0, 40), name: name.slice(0, 120), barcode: col("barcode").slice(0, 64) || null, unit: col("unit").slice(0, 12) || null, min_stock: parseQty(col("min_stock")) || 0, category: col("category").slice(0, 60) || null, note: col("note").slice(0, 500) || null, qty: map.qty == null ? null : parseQty(col("qty")) };
+      var rec = { line: idx + 2, existing: ex || null, sku: sku.slice(0, 40), name: name.slice(0, 120), barcode: col("barcode").slice(0, 64) || null, unit: col("unit").slice(0, 12) || null, min_stock: parseQty(col("min_stock")) || 0, category: col("category").slice(0, 60) || null, note: col("note").slice(0, 500) || null, qty: map.qty == null ? null : parseQty(col("qty")), supplier: col("supplier").slice(0, 120) || null, purchase_price: csvNum(col("purchase_price")), reorder_qty: csvNum(col("reorder_qty")) };
+      // Ungültige Preise/Mengen werden weggelassen statt als 0 übernommen
+      ["purchase_price", "reorder_qty"].forEach(function (k) { if (rec[k] === false) { rec[k] = null; plan.badNum++; } });
       if (rec.barcode) {
         var bk = rec.barcode.toLowerCase();
         if (seenBar[bk] || LVStore.codeInUse(rec.barcode, ex ? ex.id : null)) { rec.barcode = null; plan.barcodeClash++; }
@@ -2463,6 +2475,7 @@
     if (plan.skipNoName) notes.push(plan.skipNoName + " Zeile" + (plan.skipNoName === 1 ? "" : "n") + " ohne Bezeichnung");
     if (plan.dupInFile) notes.push(plan.dupInFile + " doppelte Artikelnummer" + (plan.dupInFile === 1 ? "" : "n") + " in der Datei");
     if (plan.skipExisting) notes.push(plan.skipExisting + " bereits vorhanden (Aktualisieren ist aus)");
+    if (plan.badNum) notes.push(plan.badNum + " ungültige" + (plan.badNum === 1 ? "r Preis bzw. ungültige Bestellmenge" : " Preise bzw. Bestellmengen") + " – wird weggelassen");
     if (plan.barcodeClash) notes.push(plan.barcodeClash + " EAN/Barcode" + (plan.barcodeClash === 1 ? "" : "s") + " bereits vergeben – wird weggelassen");
     var room = itemLimit() - LVStore.itemCount(), over = plan.newCount > room, blocked = c.map.name == null || over || !plan.items.length;
     h += '<div class="msg ' + (blocked ? "err" : "info") + '">' + (c.map.name == null ? "Bitte die Spalte mit der Bezeichnung zuordnen." :
@@ -2521,11 +2534,14 @@
           if (mapMin) rec.min_stock = p.min_stock;
           if (p.category) rec.category = p.category;
           if (p.note) rec.note = p.note;
+          if (p.supplier) rec.supplier = p.supplier;
+          if (p.purchase_price != null) rec.purchase_price = p.purchase_price;
+          if (p.reorder_qty != null) rec.reorder_qty = p.reorder_qty || null;
           rec.deleted = false; rec.updated_at = ts;
         } else {
           var sku = p.sku || takeCodeLocal();
           if (!sku) return;
-          rec = { id: LVStore.uuid(), sku: sku, name: p.name, barcode: p.barcode, unit: p.unit, min_stock: p.min_stock, category: p.category, note: p.note, active: true, deleted: false, created_at: ts, updated_at: ts };
+          rec = { id: LVStore.uuid(), sku: sku, name: p.name, barcode: p.barcode, unit: p.unit, min_stock: p.min_stock, category: p.category, note: p.note, supplier: p.supplier, purchase_price: p.purchase_price, reorder_qty: p.reorder_qty || null, active: true, deleted: false, created_at: ts, updated_at: ts };
         }
         S.items.set(rec.id, rec); LVStore.queue("item", rec.id); n++;
         if (p.qty != null && loc) {
@@ -2550,7 +2566,7 @@
     App.csv = { rows: [], header: [], map: {}, file: "", update: true, stockLoc: defaultLoc() || "" };
     modal({
       title: "Artikel aus CSV importieren", wide: true,
-      body: '<p class="help">Aus Excel: „Datei → Speichern unter → CSV (Trennzeichen-getrennt)“. Die erste Zeile enthält die Spaltenüberschriften, z. B. <b>Artikelnummer; Bezeichnung; EAN; Einheit; Mindestbestand; Kategorie; Notiz; Bestand</b>. Zeilen ohne Artikelnummer erhalten automatisch eine neue Nummer.</p>' +
+      body: '<p class="help">Aus Excel: „Datei → Speichern unter → CSV (Trennzeichen-getrennt)“. Die erste Zeile enthält die Spaltenüberschriften, z. B. <b>Artikelnummer; Bezeichnung; EAN; Einheit; Mindestbestand; Kategorie; Notiz; Bestand; Lieferant; EK-Preis; Bestellmenge</b>. Zeilen ohne Artikelnummer erhalten automatisch eine neue Nummer. Die Artikelliste aus <em>Firma &amp; Abo → Daten</em> kann direkt wieder importiert werden.</p>' +
         '<div class="btnrow top"><button class="btn ghost sm" type="button" data-act="csv-template">' + ic("download") + ' Vorlage herunterladen</button></div>' +
         '<div class="field"><label>CSV-Datei</label><input type="file" id="csvFile" accept=".csv,.txt,text/csv,text/plain" data-change="csv-file"></div>' +
         '<div id="csvBody"></div>',
@@ -2559,9 +2575,9 @@
   };
   ACTIONS["csv-template"] = function () {
     download("vaydena-lager-import-vorlage.csv", csvText([
-      ["Artikelnummer", "Bezeichnung", "EAN", "Einheit", "Mindestbestand", "Kategorie", "Notiz", "Bestand"],
-      ["", "Schrauben M8x40 verzinkt", "4006381333931", "Stk", "100", "Befestigung", "Karton à 200", "250"],
-      ["ART-000010", "Kabelbinder 200 mm schwarz", "", "Pack", "5", "Elektro", "", "12"]
+      ["Artikelnummer", "Bezeichnung", "EAN", "Einheit", "Mindestbestand", "Kategorie", "Notiz", "Bestand", "Lieferant", "EK-Preis", "Bestellmenge"],
+      ["", "Schrauben M8x40 verzinkt", "4006381333931", "Stk", "100", "Befestigung", "Karton à 200", "250", "Würth", "0,08", "400"],
+      ["ART-000010", "Kabelbinder 200 mm schwarz", "", "Pack", "5", "Elektro", "", "12", "Conrad", "3,49", "10"]
     ]), "text/csv");
   };
   INPUTS["csv-file"] = function (el) {
