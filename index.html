@@ -209,12 +209,27 @@
       <div class="feature">
         <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></svg></div>
         <h3>Artikelbilder &amp; Protokoll</h3>
-        <p>Ein Foto je Artikel hilft beim Wiederfinden. Löschungen, Stornos sowie Team- und Einstellungsänderungen werden mit Nutzer und Zeitpunkt protokolliert.</p>
+        <p>Ein Foto je Artikel hilft beim Wiederfinden. Fehlbuchungen korrigieren Sie per Storno als Gegenbuchung – nichts verschwindet. Löschungen, Stornos sowie Team- und Einstellungsänderungen werden mit Nutzer und Zeitpunkt protokolliert.</p>
       </div>
       <div class="feature">
         <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
         <h3>Team &amp; Rollen</h3>
         <p>Mitarbeiter per E-Mail einladen. Administratoren verwalten Artikel, Team und Abo, Mitarbeiter scannen und buchen. Jede Buchung mit Name, Zeit und Gerät.</p>
+      </div>
+      <div class="feature">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="m9 14 2 2 4-4"/></svg></div>
+        <h3>Inventur je Lagerort</h3>
+        <p>Lagerort wählen, Artikel scannen und zählen. Die App zeigt Soll, Gezählt und Differenz und bucht nur die Abweichungen. Zähllisten gibt es zusätzlich als CSV zum Ausdrucken.</p>
+      </div>
+      <div class="feature">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></svg></div>
+        <h3>Lagerwert &amp; Bestandsbericht</h3>
+        <p>Mit Einkaufspreis und Lieferant je Artikel sehen Sie den Warenwert pro Artikel, Lagerort und gesamt. Der Bestandsbericht lässt sich direkt drucken oder als PDF speichern.</p>
+      </div>
+      <div class="feature">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M12 18v-6M9 15l3 3 3-3"/></svg></div>
+        <h3>Import aus Excel</h3>
+        <p>Vorhandene Artikellisten als CSV hochladen. Die Spalten werden automatisch erkannt und lassen sich anpassen – inklusive Lieferant, Einkaufspreis, Bestellmenge und Anfangsbestand. Eine Vorschau zeigt vorab, was übernommen wird.</p>
       </div>
     </div>
   </div>
@@ -228,7 +243,7 @@
       <div class="ofx"><div class="k">2</div><h3>Buchen ohne Netz</h3><p>Scannen und buchen wie gewohnt. Jede Buchung wird lokal gespeichert und in einer Warteschlange gehalten. Sie sehen jederzeit, wie viele Buchungen noch ausstehen.</p></div>
       <div class="ofx"><div class="k">3</div><h3>Automatischer Abgleich</h3><p>Sobald das Gerät wieder online ist, überträgt die App alle Buchungen. Nichts wird überschrieben: Buchungen werden zeitlich sortiert zusammengeführt – auch wenn mehrere Kollegen offline gearbeitet haben.</p></div>
     </div>
-    <p class="technote">Technik: Progressive Web App mit lokaler Datenbank (IndexedDB) und eindeutigen Buchungs-IDs. Läuft auf Android, iPhone, Tablet und PC – im Browser, ohne Installation aus einem App Store.</p>
+    <p class="technote">Technik: Progressive Web App mit lokaler Datenbank (IndexedDB) und eindeutigen Buchungs-IDs. Läuft auf Android, iPhone, Tablet und PC – im Browser, ohne Installation aus einem App Store, in hellem oder dunklem Design passend zur Geräteeinstellung.</p>
   </div>
 </section>
 
@@ -324,7 +339,8 @@
       <details><summary>Welche Barcodes kann ich verwenden?<svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></summary><p>Ihre eigenen: Die App vergibt fortlaufende Nummern mit Ihrem Präfix (z. B. KB-000017) oder Sie tragen beliebige Codes ein. Gedruckt wird als QR-Code oder Code 128. Zusätzlich lassen sich vorhandene EAN-13/EAN-8/UPC-Codes vom Hersteller einem Artikel zuordnen – ein Artikel kann mehrere Codes haben.</p></details>
       <details><summary>Wie drucke ich Etiketten?<svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></summary><p>Auf jedem normalen Drucker mit A4-Etikettenbögen (z. B. Avery Zweckform 3474, 3651, 3422, 4780, 3659 oder eigene Maße). Einzeletiketten gehen über den Druckdialog auf Etikettendrucker von Brother, Dymo, Zebra und anderen. Der Bogen wird im Browser erzeugt – keine Zusatzsoftware.</p></details>
       <details><summary>Brauche ich einen Handscanner?<svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></summary><p>Nein. Die Kamera des Smartphones oder Tablets reicht. Wenn Sie bereits USB- oder Bluetooth-Scanner besitzen, funktionieren diese ebenfalls – sie geben den Code wie eine Tastatur ein, die App erkennt das automatisch.</p></details>
-      <details><summary>Kann ich meine bisherigen Daten übernehmen?<svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></summary><p>Ja. Artikel importieren Sie als CSV-Datei aus Excel (Artikelnummer, Bezeichnung, Einheit, Mindestbestand, EAN). Und Ihre Daten gehören Ihnen: Bestände und Bewegungen lassen sich jederzeit als CSV oder JSON exportieren.</p></details>
+      <details><summary>Kann ich meine bisherigen Daten übernehmen?<svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></summary><p>Ja. Artikel importieren Sie als CSV-Datei aus Excel – mit Artikelnummer, Bezeichnung, EAN, Einheit, Kategorie, Mindestbestand, Lieferant, Einkaufspreis, Bestellmenge und Notiz. Die Spalten ordnet die App automatisch zu; ein vorhandener Bestand kann gleich als Zählung an einem Lagerort gebucht werden. Und Ihre Daten gehören Ihnen: Bestände und Bewegungen lassen sich jederzeit als CSV oder JSON exportieren.</p></details>
+      <details><summary>Was ist, wenn ich mich verbucht habe?<svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></summary><p>Im Journal tippen Sie bei der Buchung auf „Storno“. Die App bucht die Menge automatisch zurück und kennzeichnet beide Einträge. So bleibt nachvollziehbar, was passiert ist – auch für den Steuerberater. Wer negativen Bestand ganz verhindern möchte, schaltet ihn in den Einstellungen ab.</p></details>
       <details><summary>Wo liegen meine Daten?<svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></summary><p>In einem Rechenzentrum in Frankfurt am Main (Supabase, EU), verschlüsselt übertragen und täglich gesichert. Die Kamera wird nur lokal zum Lesen der Codes genutzt – es werden keine Bilder übertragen. Einen Vertrag zur Auftragsverarbeitung stellen wir auf Anfrage bereit.</p></details>
       <details><summary>Wie kündige ich?<svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></summary><p>Gar nicht nötig. Es gibt keine automatische Verlängerung und keine Abbuchung. Läuft der bezahlte Zeitraum ab, erinnern wir Sie vorher per E-Mail; ohne neue Zahlung wird der Zugang nach einer Kulanzfrist von 7 Tagen auf Lesen und Export beschränkt. Auf Wunsch löschen wir alle Daten sofort.</p></details>
     </div>
