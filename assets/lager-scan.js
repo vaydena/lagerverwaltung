@@ -26,7 +26,7 @@
   function start(elId, onCode) {
     if (!supported()) return Promise.reject(new Error(secure() ? "unsupported" : "insecure"));
     return stop().then(function () {
-      inst = new Html5Qrcode(elId, { formatsToSupport: formats(), verbose: false, experimentalFeatures: { useBarCodeDetectorIfSupported: true } });
+      var me = inst = new Html5Qrcode(elId, { formatsToSupport: formats(), verbose: false, experimentalFeatures: { useBarCodeDetectorIfSupported: true } });
       var cfg = {
         fps: 10,
         qrbox: function (w, h) { return { width: Math.round(Math.min(w * 0.86, 360)), height: Math.round(Math.min(h * 0.62, 220)) }; },
@@ -34,9 +34,16 @@
       };
       return inst.start({ facingMode: "environment" }, cfg, function (text) {
         var now = Date.now();
-        if (text === lastText && now - lastAt < 2500) return;
+        // Gleicher Code zählt erst wieder, wenn er 2,5 s lang nicht mehr im Bild war
+        // (sonst zählt die Inventur hoch, solange die Kamera auf dem Etikett bleibt)
+        if (text === lastText && now - lastAt < 2500) { lastAt = now; return; }
         lastText = text; lastAt = now; beep(); onCode(String(text).trim());
-      }, function () {}).then(function () { running = true; torchOn = false; });
+      }, function () {}).then(function () {
+        // Während des Starts (z. B. offener Berechtigungsdialog) wurde stop() gerufen:
+        // Stream jetzt freigeben, sonst bleibt die Kamera an
+        if (inst !== me) { return me.stop().catch(function () {}).then(function () { try { me.clear(); } catch (e) {} }); }
+        running = true; torchOn = false;
+      });
     });
   }
   function stop() {

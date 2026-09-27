@@ -3,7 +3,7 @@
  * Supabase-/API-Aufrufe werden nie gecacht (fremder Origin -> gar nicht angefasst).
  * VERSION bei jedem Deploy erhöhen (siehe deploy-version.txt), dann tauscht der Browser den Cache aus.
  */
-var VERSION = "lv-2026-09-02-1";
+var VERSION = "lv-2026-09-27-3";
 var CACHE = "vaydena-lager-" + VERSION;
 var SHELL = [
   "app.html", "anmelden.html", "manifest.webmanifest",
@@ -24,10 +24,15 @@ function putCache(url, res) {
 self.addEventListener("install", function (e) {
   e.waitUntil(
     caches.open(CACHE).then(function (c) {
-      // Jede Datei einzeln, damit ein fehlendes Asset nicht die ganze Installation blockiert
+      // App-Shell ganz oder gar nicht: scheitert eine Kerndatei (Netzabbruch), bleibt der alte Service Worker samt
+      // vollständigem Cache aktiv, statt eine halbe Shell zu aktivieren, die offline nicht startet. Icons sind optional.
       return Promise.all(SHELL.map(function (u) {
-        return fetch(new Request(u, { cache: "reload" })).then(function (res) { if (res && res.ok) return c.put(new URL(u, self.location.href).href, res); }).catch(function () {});
-      }));
+        var optional = u.indexOf("assets/icons/") === 0;
+        return fetch(new Request(u, { cache: "reload" })).then(function (res) {
+          if (!res || !res.ok) { if (optional) return; throw new Error("sw install: " + u); }
+          return c.put(new URL(u, self.location.href).href, res);
+        }, function (err) { if (!optional) throw err; });
+      })).catch(function (err) { return caches.delete(CACHE).then(function () { throw err; }); });
     }).then(function () { return self.skipWaiting(); })
   );
 });
@@ -65,7 +70,8 @@ function networkFirst(req, url, fallback) {
 function cacheFirst(req, url) {
   var key = cacheKey(url);
   return caches.match(key).then(function (cached) {
-    var net = fetch(req).then(function (res) { putCache(url, res); return res; }).catch(function () { return cached || Response.error(); });
+    // Hintergrund-Abruf am HTTP-Cache vorbei (.htaccess: max-age=86400), sonst bleibt die alte Datei bis zu 24 h
+    var net = fetch(req, { cache: "no-cache" }).then(function (res) { putCache(url, res); return res; }).catch(function () { return cached || Response.error(); });
     return cached || net;
   });
 }

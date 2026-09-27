@@ -33,10 +33,20 @@
 
   // ---------- Push ----------
   function recLoc(r) { return { id: r.id, code: r.code, name: r.name, note: r.note || null, active: r.active !== false, deleted: !!r.deleted, created_at: r.created_at, updated_at: r.updated_at }; }
-  function recItem(r) { return { id: r.id, sku: r.sku, name: r.name, barcode: r.barcode || null, unit: r.unit || null, min_stock: Number(r.min_stock) || 0, category: r.category || null, note: r.note || null, active: r.active !== false, deleted: !!r.deleted, created_at: r.created_at, updated_at: r.updated_at }; }
+  function numOrNull(v) { return v == null || v === "" || !isFinite(Number(v)) ? null : Number(v); }
+  function recItem(r) {
+    return { id: r.id, sku: r.sku, name: r.name, barcode: r.barcode || null, unit: r.unit || null, min_stock: Number(r.min_stock) || 0, category: r.category || null, note: r.note || null,
+      supplier: r.supplier || null, purchase_price: numOrNull(r.purchase_price), reorder_qty: numOrNull(r.reorder_qty),
+      active: r.active !== false, deleted: !!r.deleted, created_at: r.created_at, updated_at: r.updated_at };
+  }
   function recCode(r) { return { id: r.id, item_id: r.item_id, code: r.code, deleted: !!r.deleted, created_at: r.created_at, updated_at: r.updated_at }; }
-  function recMov(m) { return { id: m.id, item_id: m.item_id, location_id: m.location_id, to_location_id: m.to_location_id || null, type: m.type, qty: Number(m.qty), note: m.note || null, created_at: m.created_at }; }
+  function recMov(m) { return { id: m.id, item_id: m.item_id, location_id: m.location_id, to_location_id: m.to_location_id || null, type: m.type, qty: Number(m.qty), note: m.note || null, lot: m.lot || null, best_before: m.best_before || null, reverses: m.reverses || null, created_at: m.created_at }; }
 
+  function refBlocked(movId) {
+    var m = S.pending.find(function (x) { return x.id === movId; });
+    if (!m) return false;
+    return S.outbox.some(function (o) { return o.error && (o.id === m.item_id || o.id === m.location_id || o.id === m.to_location_id); });
+  }
   function applyMaster(kind, results, startedAt) {
     (results || []).forEach(function (r) {
       var e = S.outbox.find(function (o) { return o.kind === kind && o.id === r.id; });
@@ -59,7 +69,13 @@
         else if (o.kind === "item_code") { rec = S.codes.get(o.id); if (rec && codes.length < 1000) codes.push(recCode(rec)); }
         if (!rec) S.outbox = S.outbox.filter(function (x) { return x !== o; });
       });
-      var movs = S.pending.slice(0, 2000).map(recMov);
+      // Buchungen zurückhalten, deren Artikel/Lagerort noch nicht auf dem Server ist (Stammdaten-Konflikt offen):
+      // sonst würden sie mit "nicht gefunden" verworfen, obwohl sie nach Klärung gültig sind.
+      var blocked = new Set();
+      S.outbox.forEach(function (o) { if (o.error && (o.kind === "item" || o.kind === "location")) blocked.add(o.id); });
+      var movs = S.pending.filter(function (m) {
+        return !blocked.has(m.item_id) && !blocked.has(m.location_id) && !(m.to_location_id && blocked.has(m.to_location_id));
+      }).slice(0, 2000).map(recMov);
       if (!locs.length && !items.length && !codes.length && !movs.length) return Promise.resolve({ ok: true });
       var startedAt = LVStore.nowIso();
       st.phase = "push"; emit();
@@ -73,6 +89,7 @@
         var rejected = 0;
         (R.movements || []).forEach(function (r) {
           if (r.ok || r.dup) LVStore.confirmMovement(r.id, r.delta, res.data.server_time);
+          else if (/not_found$/.test(r.error || "") && refBlocked(r.id)) { /* bleibt offen, bis der Stammdaten-Konflikt geklärt ist */ }
           else { LVStore.rejectMovement(r.id, r.error || "error"); rejected++; }
         });
         LVStore.invalidate();
@@ -101,6 +118,19 @@
     return api("pull", payload, 90000).then(function (res) {
       if (handleCommon(res)) return { ok: false };
       var d = res.data;
+      // Betrieb gewechselt (z. B. aus Betrieb A entfernt, in Betrieb B eingeladen): lokale Daten des alten Betriebs verwerfen und vollständig neu laden
+      if (S.tenant && S.tenant.id && d.tenant && d.tenant.id && d.tenant.id !== S.tenant.id) {
+        Object.keys(S.images || {}).forEach(function (id) { LVStore.setImageCache(id, null); });
+        S.items = new Map(); S.locations = new Map(); S.codes = new Map(); S.stock = new Map(); S.movements = new Map();
+        S.lots = []; S.images = {}; S.outbox = [];
+        S.meta.since = null; S.meta.reserved = { items: [], locations: [] }; S.meta.last_used_location = null;
+        S.tenant = d.tenant; S.member = d.member || null; S.members = d.members || [];
+        LVStore.invalidate();
+        return LVStore.save(["tenant", "member", "members", "items", "codes", "locations", "stock", "movements", "outbox", "meta", "lots", "images"], true).then(function () {
+          LVStore.emit("change", { kind: "tenant" });
+          return { ok: true, more: true };
+        });
+      }
       S.tenant = d.tenant || S.tenant; S.member = d.member || S.member; S.members = d.members || S.members;
       if (d.full) {
         var keep = { item: new Map(), location: new Map(), item_code: new Map() };
@@ -125,6 +155,14 @@
         var arr = Array.from(S.movements.values()).sort(function (a, b) { return (b.created_at || "").localeCompare(a.created_at || ""); }).slice(0, 5000);
         S.movements = new Map(arr.map(function (m) { return [m.id, m]; }));
       }
+      // Chargen und Bildverzeichnis kommen immer vollständig
+      if (Array.isArray(d.stock_lots)) S.lots = d.stock_lots;
+      if (Array.isArray(d.images)) {
+        var imgs = {};
+        d.images.forEach(function (x) { imgs[x.item_id] = x.updated_at; });
+        Object.keys(S.images).forEach(function (id) { if (!imgs[id]) LVStore.setImageCache(id, null); });
+        S.images = imgs;
+      }
       // Bestandszeilen zu gelöschten Artikeln/Orten entfernen
       S.stock.forEach(function (r, k) { if (!S.items.has(r.item_id) || !S.locations.has(r.location_id)) S.stock.delete(k); });
       if (d.codes_reserved) {
@@ -138,21 +176,28 @@
       st.subInactive = !(d.tenant && d.tenant.sub && d.tenant.sub.active);
       st.authLost = false; st.lastError = null; st.lastOk = S.meta.last_sync;
       LVStore.invalidate();
-      return LVStore.save(["tenant", "member", "members", "items", "codes", "locations", "stock", "movements", "pending", "meta"], true).then(function () {
+      return LVStore.save(["tenant", "member", "members", "items", "codes", "locations", "stock", "movements", "pending", "meta", "lots", "images"], true).then(function () {
         LVStore.emit("change", { kind: "pull", full: !!d.full });
-        return { ok: true };
+        return { ok: true, more: !!d.more };
       });
     });
+  }
+  // Große Rückstände seitenweise holen (Server liefert "more", solange weitere Bewegungen warten)
+  function pullAll() {
+    var pages = 0;
+    function next() { return pull().then(function (r) { return (r && r.ok && r.more && ++pages < 40) ? next() : r; }); }
+    return next();
   }
 
   // ---------- Steuerung ----------
   function sync(reason) {
+    if (st.halted) return Promise.resolve({ halted: true });
     if (!navigator.onLine) { st.offline = true; emit(); return Promise.resolve({ offline: true }); }
     if (st.syncing) { again = true; return Promise.resolve({ busy: true }); }
     st.syncing = true; st.offline = false; st.phase = "start"; emit();
     var result = { ok: false };
     return push().then(function (r) {
-      if (r.ok || st.subInactive) return pull();   // bei Abo-Sperre trotzdem Stammdaten/Status holen
+      if (r.ok || st.subInactive) return pullAll();   // bei Abo-Sperre trotzdem Stammdaten/Status holen
       return r;
     }).then(function (r) { result = r || result; }).catch(function (e) { st.lastError = (e && e.message) || "error"; })
       .then(function () {
@@ -173,5 +218,7 @@
     return { pending: S.pending.length + (S.outbox.length - conflicts.length), conflicts: conflicts.length, failed: S.failed.length };
   }
 
-  window.LVSync = { st: st, sync: sync, schedule: schedule, start: start, api: api, counts: counts, handleCommon: handleCommon };
+  // Tab gibt an einen anderen Tab ab: keine weiteren Abgleiche
+  function halt() { st.halted = true; clearTimeout(timer); if (intervalId) { clearInterval(intervalId); intervalId = null; } }
+  window.LVSync = { st: st, sync: sync, schedule: schedule, start: start, halt: halt, api: api, counts: counts, handleCommon: handleCommon };
 })();

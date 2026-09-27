@@ -27,6 +27,19 @@ const PLANS: Record<string, Plan> = {
   business: { label: "Business", users: 30, items: 1000000, price: { monat: 9900, jahr: 99000 } },
 };
 
+// Auth-Konto darf nur gelöscht werden, wenn die Lagerverwaltung es selbst angelegt hat (Einladung),
+// es nie benutzt wurde und kein anderes Vaydena-Produkt es kennt (auth.users ist geteilt).
+async function authDeletable(uid: string): Promise<boolean> {
+  const r = await sql`select m.auth_created, u.last_sign_in_at from lager.members m join auth.users u on u.id = m.id where m.id = ${uid} limit 1`;
+  if (!r.length || r[0].auth_created !== true || r[0].last_sign_in_at) return false;
+  for (const tbl of ["public.profiles", "schulung.members", "punkto.users"]) {
+    const reg = await sql`select to_regclass(${tbl}) as r`;
+    if (!reg[0].r) continue;
+    const x = await sql.unsafe(`select 1 from ${tbl} where id = $1 limit 1`, [uid]);
+    if (x.length) return false;
+  }
+  return true;
+}
 async function sha256hex(s: string) {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -38,7 +51,12 @@ function safeEqual(a: string, b: string) {
 }
 function ymd(v: unknown): string { if (!v) return ""; const s = v instanceof Date ? v.toISOString() : String(v); return s.slice(0, 10); }
 function dmy(v: unknown): string { const s = ymd(v); const p = s.split("-"); return p.length === 3 ? `${p[2]}.${p[1]}.${p[0]}` : s; }
-function todayYmd(): string { return new Date().toISOString().slice(0, 10); }
+// Protokoll-Eintrag beim Mandanten (Aktionen des Betreibers)
+async function audit(tid: string, action: string, detail: Record<string, unknown> = {}) {
+  try { await sql`insert into lager.audit (tenant_id, actor, action, detail) values (${tid}, 'Betreiber', ${action}, ${sql.json(detail as any)})`; }
+  catch (_e) { /* best-effort */ }
+}
+function todayYmd(): string { return new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Berlin" }).format(new Date()); }
 function addDays(d: string, n: number): string { const x = new Date(d + "T00:00:00Z"); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); }
 function daysBetween(a: string, b: string): number { return Math.round((Date.parse(b + "T00:00:00Z") - Date.parse(a + "T00:00:00Z")) / 86400000); }
 function subState(t: any) {
@@ -137,6 +155,7 @@ Deno.serve(async (req: Request) => {
 
   let body: Record<string, any>;
   try { body = await req.json(); } catch { return json({ error: "bad_json" }, 400); }
+  if (!body || typeof body !== "object" || Array.isArray(body)) return json({ error: "bad_json" }, 400);
   const action = String(body?.action ?? "").trim();
 
   try {
@@ -191,9 +210,11 @@ Deno.serve(async (req: Request) => {
       if (!PLANS[plan]) return json({ error: "bad_plan" }, 400);
       const months = Math.max(0, Math.min(60, Number(body.months) | 0));
       const trialDays = Math.max(0, Math.min(365, Number(body.trial_days) | 0));
+      const today = todayYmd();
       await sql`update lager.tenants set plan = ${plan}, updated_at = now() where id = ${id}`;
-      if (months > 0) await sql`update lager.tenants set paid_until = (greatest(coalesce(paid_until, current_date), current_date) + (${months}::int * interval '1 month'))::date where id = ${id}`;
-      if (plan === "trial" && trialDays > 0) await sql`update lager.tenants set trial_ends_at = current_date + ${trialDays}::int where id = ${id}`;
+      if (months > 0) await sql`update lager.tenants set paid_until = (greatest(coalesce(paid_until, ${today}::date), ${today}::date) + (${months}::int * interval '1 month'))::date where id = ${id}`;
+      if (plan === "trial" && trialDays > 0) await sql`update lager.tenants set trial_ends_at = ${today}::date + ${trialDays}::int where id = ${id}`;
+      await audit(id, "plan_set", { plan, months, trial_days: trialDays });
       return json({ ok: true });
     }
 
@@ -202,6 +223,7 @@ Deno.serve(async (req: Request) => {
       if (!UUID_RE.test(id)) return json({ error: "bad_id" }, 400);
       const status = body.status === "gesperrt" ? "gesperrt" : "aktiv";
       await sql`update lager.tenants set status = ${status}, updated_at = now() where id = ${id}`;
+      await audit(id, "status_set", { status });
       return json({ ok: true });
     }
 
@@ -227,12 +249,29 @@ Deno.serve(async (req: Request) => {
       if (!inv.length) return json({ error: "not_found" }, 404);
       if (inv[0].status === "paid") return json({ error: "already_paid" }, 400);
       const months = inv[0].period === "jahr" ? 12 : 1;
-      await sql.begin(async (tx: any) => {
-        await tx`update lager.invoices set status = 'paid', paid_at = now() where id = ${id}`;
+      const today = todayYmd();
+      const done = await sql.begin(async (tx: any) => {
+        // atomar: ein Doppelklick verlängert nicht doppelt
+        const claim = await tx`update lager.invoices set status = 'paid', paid_at = now() where id = ${id} and status <> 'paid' returning id`;
+        if (!claim.length) return false;
+        const cur = await tx`select plan, paid_until from lager.tenants where id = ${inv[0].tenant_id} for update`;
+        // Tarifwechsel: Restlaufzeit des alten Tarifs wertgleich in Tage des neuen umrechnen
+        let base = today;
+        const pu = ymd(cur[0].paid_until);
+        if (pu && pu > today) {
+          const oldP = PLANS[cur[0].plan], newP = PLANS[inv[0].plan];
+          const rest = daysBetween(today, pu);
+          const credit = (oldP && newP && cur[0].plan !== inv[0].plan && oldP.price.monat > 0 && newP.price.monat > 0)
+            ? Math.floor(rest * oldP.price.monat / newP.price.monat) : rest;
+          base = addDays(today, credit);
+        }
         await tx`update lager.tenants set plan = ${inv[0].plan}, status = 'aktiv',
-          paid_until = (greatest(coalesce(paid_until, current_date), current_date) + (${months}::int * interval '1 month'))::date,
+          paid_until = (${base}::date + (${months}::int * interval '1 month'))::date,
           updated_at = now() where id = ${inv[0].tenant_id}`;
+        return true;
       });
+      if (!done) return json({ error: "already_paid" }, 400);
+      await audit(inv[0].tenant_id, "invoice_paid", { plan: inv[0].plan, period: inv[0].period });
       const t = await sql`select paid_until, contact_email, billing, name from lager.tenants where id = ${inv[0].tenant_id}`;
       const to = (t[0].billing && t[0].billing.email) || t[0].contact_email;
       if (to) {
@@ -272,12 +311,14 @@ Deno.serve(async (req: Request) => {
       if (!t.length) return json({ error: "not_found" }, 404);
       if (str(body.confirm, 200) !== t[0].name) return json({ error: "confirm_mismatch" }, 400);
       const members = await sql`select id from lager.members where tenant_id = ${id}`;
+      const deletable: string[] = [];
+      for (const m of members) if (await authDeletable(String(m.id))) deletable.push(String(m.id));
       await sql`delete from lager.tenants where id = ${id}`;
+      const ids = members.map((m: any) => String(m.id));
+      if (ids.length) await sql`update lager.auth_tokens set used_at = now() where user_id = any(${ids}::uuid[]) and used_at is null`;
       let deletedUsers = 0;
-      for (const m of members) {
-        const elsewhere = await sql`select 1 from schulung.members where id = ${m.id} limit 1`;
-        if (elsewhere.length) continue;
-        const r = await gotrue(`admin/users/${m.id}`, "DELETE");
+      for (const uid of deletable) {
+        const r = await gotrue(`admin/users/${uid}`, "DELETE");
         if (r.ok) deletedUsers++;
       }
       return json({ ok: true, deleted_users: deletedUsers, members: members.length });

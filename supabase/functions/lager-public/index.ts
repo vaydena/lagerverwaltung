@@ -1,5 +1,6 @@
 // lager-public — öffentliche Aktionen (verify_jwt = false)
-// register, request_reset, set_password (Reset + Einladung), check_token, invoice (Zahlseite mit GiroCode), lead
+// register, request_reset, set_password (Reset + Einladung), check_token, invoice (Zahlseite mit GiroCode), lead,
+// cron_low_stock (tägliche Mindestbestand-/MHD-Übersicht; per pg_cron, höchstens eine Mail je Firma und Tag)
 import postgres from "npm:postgres@3";
 import QRCode from "npm:qrcode@1";
 
@@ -51,6 +52,19 @@ async function gotrue(path: string, method: string, body?: unknown) {
   const txt = await r.text(); let data: any = null; try { data = txt ? JSON.parse(txt) : null; } catch { /* */ }
   return { ok: r.ok, status: r.status, data };
 }
+function clientIp(req: Request): string {
+  const xf = req.headers.get("x-forwarded-for") || "";
+  return (xf.split(",")[0] || req.headers.get("cf-connecting-ip") || "unknown").trim().slice(0, 64);
+}
+// true = Limit erreicht; record=true zählt diesen Versuch gleich mit
+async function rateHit(kind: string, key: string, max: number, window: string, record = true): Promise<boolean> {
+  const r = await sql`select count(*)::int as n from lager.rate_events where kind = ${kind} and key = ${key} and created_at > now() - ${window}::interval`;
+  if (r[0].n >= max) return true;
+  if (record) await sql`insert into lager.rate_events (kind, key) values (${kind}, ${key})`;
+  if (Math.random() < 0.02) await sql`delete from lager.rate_events where created_at < now() - interval '2 days'`;
+  return false;
+}
+
 async function passwordOk(email: string, password: string) {
   const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
     method: "POST", headers: { apikey: SERVICE, "Content-Type": "application/json" },
@@ -123,6 +137,7 @@ Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
   let body: Record<string, any>;
   try { body = await req.json(); } catch { return json({ error: "bad_json" }, 400); }
+  if (!body || typeof body !== "object" || Array.isArray(body)) return json({ error: "bad_json" }, 400);
   const action = String(body?.action ?? "").trim();
 
   try {
@@ -136,8 +151,10 @@ Deno.serve(async (req: Request) => {
       if (company.length < 2) return json({ error: "bad_company" }, 400);
       if (!EMAIL_RE.test(email)) return json({ error: "bad_email" }, 400);
       if (password.length < 8 || password.length > 200) return json({ error: "bad_password" }, 400);
+      // Rate-Limits: je IP (Anlage-Spam) und je E-Mail (Passwort-Raten über bestehende Konten); global nur als Notbremse.
+      if (await rateHit("register_ip", clientIp(req), 10, "1 hour")) return json({ error: "rate_limited" }, 429);
       const recent = await sql`select count(*)::int as n from lager.tenants where created_at > now() - interval '1 hour'`;
-      if (recent[0].n >= 30) return json({ error: "rate_limited" }, 429);
+      if (recent[0].n >= 200) return json({ error: "rate_limited" }, 429);
 
       let uid: string;
       const au = await sql`select id from auth.users where lower(email) = ${email} limit 1`;
@@ -145,7 +162,11 @@ Deno.serve(async (req: Request) => {
         // Nutzer existiert bereits (anderes Vaydena-Produkt oder frühere Registrierung): Passwort muss stimmen
         const member = await sql`select tenant_id from lager.members where id = ${au[0].id} limit 1`;
         if (member.length) return json({ error: "already_registered" }, 400);
-        if (!(await passwordOk(email, password))) return json({ error: "email_exists" }, 400);
+        if (await rateHit("register_pw", email, 5, "1 hour", false)) return json({ error: "rate_limited" }, 429);
+        if (!(await passwordOk(email, password))) {
+          await sql`insert into lager.rate_events (kind, key) values ('register_pw', ${email})`;
+          return json({ error: "email_exists" }, 400);
+        }
         uid = String(au[0].id);
       } else {
         const cr = await gotrue("admin/users", "POST", { email, password, email_confirm: true, user_metadata: { name, company } });
@@ -194,12 +215,25 @@ Deno.serve(async (req: Request) => {
       const password = String(body.password ?? "");
       if (!/^[0-9a-f]{64}$/.test(token)) return json({ error: "invalid_token" }, 400);
       if (password.length < 8 || password.length > 200) return json({ error: "bad_password" }, 400);
-      const rows = await sql`select token_hash, user_id, email, purpose from lager.auth_tokens where token_hash = ${await sha256hex(token)} and used_at is null and expires_at > now() limit 1`;
+      // Token atomar einlösen: zwei parallele Aufrufe können ihn nicht beide verwenden
+      const hash = await sha256hex(token);
+      const rows = await sql`update lager.auth_tokens set used_at = now() where token_hash = ${hash} and used_at is null and expires_at > now()
+        returning user_id, email, purpose`;
       if (!rows.length) return json({ error: "invalid_token" }, 400);
-      const r = await gotrue(`admin/users/${rows[0].user_id}`, "PUT", { password, email_confirm: true });
-      if (!r.ok) return json({ error: "update_failed" }, 400);
-      await sql`update lager.auth_tokens set used_at = now() where token_hash = ${rows[0].token_hash}`;
-      return json({ ok: true, email: rows[0].email, purpose: rows[0].purpose });
+      const tok = rows[0];
+      const u = await sql`select u.email, u.last_sign_in_at, m.auth_created from auth.users u join lager.members m on m.id = u.id where u.id = ${tok.user_id} limit 1`;
+      // Nur Lager-Mitglieder mit unveränderter E-Mail. Einladungs-Links setzen nur bei neu angelegten, noch nie
+      // benutzten Konten ein Passwort – ein geteiltes Vaydena-Konto kann darüber nicht übernommen werden.
+      if (!u.length || String(u[0].email || "").toLowerCase() !== String(tok.email).toLowerCase()) return json({ error: "invalid_token" }, 400);
+      if (tok.purpose === "invite" && (u[0].auth_created !== true || u[0].last_sign_in_at)) return json({ error: "invite_used" }, 400);
+      const r = await gotrue(`admin/users/${tok.user_id}`, "PUT", { password, email_confirm: true });
+      if (!r.ok) {
+        await sql`update lager.auth_tokens set used_at = null where token_hash = ${hash}`;
+        return json({ error: "update_failed" }, 400);
+      }
+      // übrige offene Links dieses Kontos entwerten
+      await sql`update lager.auth_tokens set used_at = now() where user_id = ${tok.user_id} and used_at is null`;
+      return json({ ok: true, email: tok.email, purpose: tok.purpose });
     }
 
     if (action === "check_token") {
@@ -244,6 +278,56 @@ Deno.serve(async (req: Request) => {
         `Firma: ${firma}\nName: ${name}\nE-Mail: ${email}\n\n${nachricht}`,
         mailShell("Neue Anfrage", `<p><b>${esc(firma)}</b><br>${esc(name)}<br>${esc(email)}</p><p style="white-space:pre-wrap">${esc(nachricht)}</p>`));
       return json({ ok: true });
+    }
+
+    // -------- Tägliche Mindestbestand-/MHD-Übersicht (pg_cron) --------
+    // Ohne Geheimnis aufrufbar, aber harmlos: je Firma mit Opt-in höchstens eine Mail pro Kalendertag.
+    if (action === "cron_low_stock") {
+      if (await rateHit("cron_low_stock", "all", 6, "1 hour")) return json({ error: "rate_limited" }, 429);
+      const today = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Berlin" }).format(new Date());
+      const tenants = await sql`select id, name, plan, trial_ends_at, paid_until, settings, contact_email from lager.tenants
+        where status = 'aktiv' and coalesce((settings->>'low_stock_mail')::boolean, false) = true
+          and (low_stock_mailed_on is null or low_stock_mailed_on < ${today}::date)
+          and ((plan = 'trial' and trial_ends_at >= ${today}::date) or (plan <> 'trial' and paid_until + 7 >= ${today}::date))
+        limit 200`;
+      let sent = 0;
+      for (const t of tenants) {
+        const claim = await sql`update lager.tenants set low_stock_mailed_on = ${today}::date
+          where id = ${t.id} and (low_stock_mailed_on is null or low_stock_mailed_on < ${today}::date) returning id`;
+        if (!claim.length) continue;
+        const low = await sql`select i.sku, i.name, i.unit, i.min_stock::float8 as min_stock, i.reorder_qty::float8 as reorder_qty, i.supplier,
+            coalesce(sum(s.qty), 0)::float8 as qty
+          from lager.items i left join lager.stock s on s.item_id = i.id and s.tenant_id = i.tenant_id
+          where i.tenant_id = ${t.id} and i.deleted = false and i.active = true and i.min_stock is not null and i.min_stock > 0
+          group by i.id having coalesce(sum(s.qty), 0) < i.min_stock order by i.name limit 300`;
+        const days = Math.max(1, Math.min(365, Number((t.settings || {}).expiry_days) || 30));
+        const exp = await sql`select i.sku, i.name, i.unit, l.code as loc, sl.lot, sl.best_before::text as bb, sl.qty::float8 as qty
+          from lager.stock_lots sl join lager.items i on i.id = sl.item_id join lager.locations l on l.id = sl.location_id
+          where sl.tenant_id = ${t.id} and sl.qty > 0 and sl.best_before is not null and i.deleted = false
+            and sl.best_before <= ${today}::date + ${days}::int
+          order by sl.best_before, i.name limit 300`;
+        if (!low.length && !exp.length) continue;
+        let to: string[] = [];
+        const custom = String((t.settings || {}).low_stock_mail_to || "");
+        if (EMAIL_RE.test(custom)) to = [custom];
+        else to = (await sql`select email from lager.members where tenant_id = ${t.id} and role = 'admin' and active = true and email is not null`).map((r: any) => String(r.email)).filter((e: string) => EMAIL_RE.test(e));
+        if (!to.length) continue;
+        const f = (n: number) => String(Math.round(n * 1000) / 1000).replace(".", ",");
+        const sug = (r: any) => Math.max(Number(r.reorder_qty) || 0, Number(r.min_stock) - Number(r.qty));
+        const lowTxt = low.map((r: any) => `- ${r.name} (${r.sku}): ${f(r.qty)} von mind. ${f(r.min_stock)} ${r.unit} – Vorschlag: ${f(sug(r))} ${r.unit}${r.supplier ? " bei " + r.supplier : ""}`).join("\n");
+        const expTxt = exp.map((r: any) => `- ${r.name} (${r.sku}) @ ${r.loc}${r.lot ? ", Charge " + r.lot : ""}: ${f(r.qty)} ${r.unit}, MHD ${dmy(r.bb)}${r.bb < today ? " (abgelaufen)" : ""}`).join("\n");
+        const td = "padding:4px 8px;border-bottom:1px solid #e3ecee;font-size:14px";
+        const lowHtml = low.length ? `<h3 style="margin:18px 0 6px">Unter Mindestbestand (${low.length})</h3><table style="border-collapse:collapse;width:100%"><tr><th align="left" style="${td}">Artikel</th><th align="right" style="${td}">Bestand</th><th align="right" style="${td}">Mindest</th><th align="right" style="${td}">Vorschlag</th></tr>${low.map((r: any) => `<tr><td style="${td}">${esc(r.name)}<br><small style="color:#5c7883">${esc(r.sku)}${r.supplier ? " · " + esc(r.supplier) : ""}</small></td><td align="right" style="${td}">${esc(f(r.qty))}</td><td align="right" style="${td}">${esc(f(r.min_stock))}</td><td align="right" style="${td}"><b>${esc(f(sug(r)))}</b> ${esc(r.unit)}</td></tr>`).join("")}</table>` : "";
+        const expHtml = exp.length ? `<h3 style="margin:18px 0 6px">MHD in den nächsten ${days} Tagen (${exp.length})</h3><table style="border-collapse:collapse;width:100%">${exp.map((r: any) => `<tr><td style="${td}">${esc(r.name)}<br><small style="color:#5c7883">${esc(r.sku)} · ${esc(r.loc)}${r.lot ? " · Charge " + esc(r.lot) : ""}</small></td><td align="right" style="${td}">${esc(f(r.qty))} ${esc(r.unit)}</td><td align="right" style="${td}${r.bb < today ? ";color:#b42318;font-weight:700" : ""}">${esc(dmy(r.bb))}</td></tr>`).join("")}</table>` : "";
+        const appLink = `${SITE}/app.html`;
+        for (const addr of to) {
+          const r = await sendMail(addr, `Lagerübersicht ${dmy(today)} — ${t.name}`,
+            `Guten Tag,\n\nTagesübersicht für ${t.name}:\n\n${low.length ? "Unter Mindestbestand:\n" + lowTxt + "\n\n" : ""}${exp.length ? "MHD in den nächsten " + days + " Tagen:\n" + expTxt + "\n\n" : ""}App: ${appLink}\n\nDiese Mail lässt sich in der App unter Einstellungen abschalten.\n\n${PRODUCT}`,
+            mailShell(`Lagerübersicht ${dmy(today)}`, `<p>Tagesübersicht für <b>${esc(t.name)}</b>.</p>${lowHtml}${expHtml}${button(appLink, "App öffnen")}<p style="font-size:12px;color:#5c7883">Diese Mail lässt sich in der App unter Einstellungen abschalten.</p>`));
+          if (r.ok) sent++;
+        }
+      }
+      return json({ ok: true, tenants: tenants.length, sent });
     }
 
     return json({ error: "unknown_action" }, 400);
