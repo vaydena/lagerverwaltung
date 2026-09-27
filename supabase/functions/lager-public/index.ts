@@ -1,5 +1,6 @@
 // lager-public — öffentliche Aktionen (verify_jwt = false)
-// register, request_reset, set_password (Reset + Einladung), check_token, invoice (Zahlseite mit GiroCode), lead
+// register, request_reset, set_password (Reset + Einladung), check_token, invoice (Zahlseite mit GiroCode), lead,
+// cron_low_stock (tägliche Mindestbestand-/MHD-Übersicht; per pg_cron, höchstens eine Mail je Firma und Tag)
 import postgres from "npm:postgres@3";
 import QRCode from "npm:qrcode@1";
 
@@ -136,7 +137,6 @@ Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
   let body: Record<string, any>;
   try { body = await req.json(); } catch { return json({ error: "bad_json" }, 400); }
-  if (!body || typeof body !== "object" || Array.isArray(body)) return json({ error: "bad_json" }, 400);
   if (!body || typeof body !== "object" || Array.isArray(body)) return json({ error: "bad_json" }, 400);
   const action = String(body?.action ?? "").trim();
 
@@ -278,6 +278,56 @@ Deno.serve(async (req: Request) => {
         `Firma: ${firma}\nName: ${name}\nE-Mail: ${email}\n\n${nachricht}`,
         mailShell("Neue Anfrage", `<p><b>${esc(firma)}</b><br>${esc(name)}<br>${esc(email)}</p><p style="white-space:pre-wrap">${esc(nachricht)}</p>`));
       return json({ ok: true });
+    }
+
+    // -------- Tägliche Mindestbestand-/MHD-Übersicht (pg_cron) --------
+    // Ohne Geheimnis aufrufbar, aber harmlos: je Firma mit Opt-in höchstens eine Mail pro Kalendertag.
+    if (action === "cron_low_stock") {
+      if (await rateHit("cron_low_stock", "all", 6, "1 hour")) return json({ error: "rate_limited" }, 429);
+      const today = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Berlin" }).format(new Date());
+      const tenants = await sql`select id, name, plan, trial_ends_at, paid_until, settings, contact_email from lager.tenants
+        where status = 'aktiv' and coalesce((settings->>'low_stock_mail')::boolean, false) = true
+          and (low_stock_mailed_on is null or low_stock_mailed_on < ${today}::date)
+          and ((plan = 'trial' and trial_ends_at >= ${today}::date) or (plan <> 'trial' and paid_until + 7 >= ${today}::date))
+        limit 200`;
+      let sent = 0;
+      for (const t of tenants) {
+        const claim = await sql`update lager.tenants set low_stock_mailed_on = ${today}::date
+          where id = ${t.id} and (low_stock_mailed_on is null or low_stock_mailed_on < ${today}::date) returning id`;
+        if (!claim.length) continue;
+        const low = await sql`select i.sku, i.name, i.unit, i.min_stock::float8 as min_stock, i.reorder_qty::float8 as reorder_qty, i.supplier,
+            coalesce(sum(s.qty), 0)::float8 as qty
+          from lager.items i left join lager.stock s on s.item_id = i.id and s.tenant_id = i.tenant_id
+          where i.tenant_id = ${t.id} and i.deleted = false and i.active = true and i.min_stock is not null and i.min_stock > 0
+          group by i.id having coalesce(sum(s.qty), 0) < i.min_stock order by i.name limit 300`;
+        const days = Math.max(1, Math.min(365, Number((t.settings || {}).expiry_days) || 30));
+        const exp = await sql`select i.sku, i.name, i.unit, l.code as loc, sl.lot, sl.best_before::text as bb, sl.qty::float8 as qty
+          from lager.stock_lots sl join lager.items i on i.id = sl.item_id join lager.locations l on l.id = sl.location_id
+          where sl.tenant_id = ${t.id} and sl.qty > 0 and sl.best_before is not null and i.deleted = false
+            and sl.best_before <= ${today}::date + ${days}::int
+          order by sl.best_before, i.name limit 300`;
+        if (!low.length && !exp.length) continue;
+        let to: string[] = [];
+        const custom = String((t.settings || {}).low_stock_mail_to || "");
+        if (EMAIL_RE.test(custom)) to = [custom];
+        else to = (await sql`select email from lager.members where tenant_id = ${t.id} and role = 'admin' and active = true and email is not null`).map((r: any) => String(r.email)).filter((e: string) => EMAIL_RE.test(e));
+        if (!to.length) continue;
+        const f = (n: number) => String(Math.round(n * 1000) / 1000).replace(".", ",");
+        const sug = (r: any) => Math.max(Number(r.reorder_qty) || 0, Number(r.min_stock) - Number(r.qty));
+        const lowTxt = low.map((r: any) => `- ${r.name} (${r.sku}): ${f(r.qty)} von mind. ${f(r.min_stock)} ${r.unit} – Vorschlag: ${f(sug(r))} ${r.unit}${r.supplier ? " bei " + r.supplier : ""}`).join("\n");
+        const expTxt = exp.map((r: any) => `- ${r.name} (${r.sku}) @ ${r.loc}${r.lot ? ", Charge " + r.lot : ""}: ${f(r.qty)} ${r.unit}, MHD ${dmy(r.bb)}${r.bb < today ? " (abgelaufen)" : ""}`).join("\n");
+        const td = "padding:4px 8px;border-bottom:1px solid #e3ecee;font-size:14px";
+        const lowHtml = low.length ? `<h3 style="margin:18px 0 6px">Unter Mindestbestand (${low.length})</h3><table style="border-collapse:collapse;width:100%"><tr><th align="left" style="${td}">Artikel</th><th align="right" style="${td}">Bestand</th><th align="right" style="${td}">Mindest</th><th align="right" style="${td}">Vorschlag</th></tr>${low.map((r: any) => `<tr><td style="${td}">${esc(r.name)}<br><small style="color:#5c7883">${esc(r.sku)}${r.supplier ? " · " + esc(r.supplier) : ""}</small></td><td align="right" style="${td}">${esc(f(r.qty))}</td><td align="right" style="${td}">${esc(f(r.min_stock))}</td><td align="right" style="${td}"><b>${esc(f(sug(r)))}</b> ${esc(r.unit)}</td></tr>`).join("")}</table>` : "";
+        const expHtml = exp.length ? `<h3 style="margin:18px 0 6px">MHD in den nächsten ${days} Tagen (${exp.length})</h3><table style="border-collapse:collapse;width:100%">${exp.map((r: any) => `<tr><td style="${td}">${esc(r.name)}<br><small style="color:#5c7883">${esc(r.sku)} · ${esc(r.loc)}${r.lot ? " · Charge " + esc(r.lot) : ""}</small></td><td align="right" style="${td}">${esc(f(r.qty))} ${esc(r.unit)}</td><td align="right" style="${td}${r.bb < today ? ";color:#b42318;font-weight:700" : ""}">${esc(dmy(r.bb))}</td></tr>`).join("")}</table>` : "";
+        const appLink = `${SITE}/app.html`;
+        for (const addr of to) {
+          const r = await sendMail(addr, `Lagerübersicht ${dmy(today)} — ${t.name}`,
+            `Guten Tag,\n\nTagesübersicht für ${t.name}:\n\n${low.length ? "Unter Mindestbestand:\n" + lowTxt + "\n\n" : ""}${exp.length ? "MHD in den nächsten " + days + " Tagen:\n" + expTxt + "\n\n" : ""}App: ${appLink}\n\nDiese Mail lässt sich in der App unter Einstellungen abschalten.\n\n${PRODUCT}`,
+            mailShell(`Lagerübersicht ${dmy(today)}`, `<p>Tagesübersicht für <b>${esc(t.name)}</b>.</p>${lowHtml}${expHtml}${button(appLink, "App öffnen")}<p style="font-size:12px;color:#5c7883">Diese Mail lässt sich in der App unter Einstellungen abschalten.</p>`));
+          if (r.ok) sent++;
+        }
+      }
+      return json({ ok: true, tenants: tenants.length, sent });
     }
 
     return json({ error: "unknown_action" }, 400);

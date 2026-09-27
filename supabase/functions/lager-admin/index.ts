@@ -51,6 +51,11 @@ function safeEqual(a: string, b: string) {
 }
 function ymd(v: unknown): string { if (!v) return ""; const s = v instanceof Date ? v.toISOString() : String(v); return s.slice(0, 10); }
 function dmy(v: unknown): string { const s = ymd(v); const p = s.split("-"); return p.length === 3 ? `${p[2]}.${p[1]}.${p[0]}` : s; }
+// Protokoll-Eintrag beim Mandanten (Aktionen des Betreibers)
+async function audit(tid: string, action: string, detail: Record<string, unknown> = {}) {
+  try { await sql`insert into lager.audit (tenant_id, actor, action, detail) values (${tid}, 'Betreiber', ${action}, ${sql.json(detail as any)})`; }
+  catch (_e) { /* best-effort */ }
+}
 function todayYmd(): string { return new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Berlin" }).format(new Date()); }
 function addDays(d: string, n: number): string { const x = new Date(d + "T00:00:00Z"); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); }
 function daysBetween(a: string, b: string): number { return Math.round((Date.parse(b + "T00:00:00Z") - Date.parse(a + "T00:00:00Z")) / 86400000); }
@@ -205,9 +210,11 @@ Deno.serve(async (req: Request) => {
       if (!PLANS[plan]) return json({ error: "bad_plan" }, 400);
       const months = Math.max(0, Math.min(60, Number(body.months) | 0));
       const trialDays = Math.max(0, Math.min(365, Number(body.trial_days) | 0));
+      const today = todayYmd();
       await sql`update lager.tenants set plan = ${plan}, updated_at = now() where id = ${id}`;
-      if (months > 0) await sql`update lager.tenants set paid_until = (greatest(coalesce(paid_until, current_date), current_date) + (${months}::int * interval '1 month'))::date where id = ${id}`;
-      if (plan === "trial" && trialDays > 0) await sql`update lager.tenants set trial_ends_at = current_date + ${trialDays}::int where id = ${id}`;
+      if (months > 0) await sql`update lager.tenants set paid_until = (greatest(coalesce(paid_until, ${today}::date), ${today}::date) + (${months}::int * interval '1 month'))::date where id = ${id}`;
+      if (plan === "trial" && trialDays > 0) await sql`update lager.tenants set trial_ends_at = ${today}::date + ${trialDays}::int where id = ${id}`;
+      await audit(id, "plan_set", { plan, months, trial_days: trialDays });
       return json({ ok: true });
     }
 
@@ -216,6 +223,7 @@ Deno.serve(async (req: Request) => {
       if (!UUID_RE.test(id)) return json({ error: "bad_id" }, 400);
       const status = body.status === "gesperrt" ? "gesperrt" : "aktiv";
       await sql`update lager.tenants set status = ${status}, updated_at = now() where id = ${id}`;
+      await audit(id, "status_set", { status });
       return json({ ok: true });
     }
 
@@ -263,6 +271,7 @@ Deno.serve(async (req: Request) => {
         return true;
       });
       if (!done) return json({ error: "already_paid" }, 400);
+      await audit(inv[0].tenant_id, "invoice_paid", { plan: inv[0].plan, period: inv[0].period });
       const t = await sql`select paid_until, contact_email, billing, name from lager.tenants where id = ${inv[0].tenant_id}`;
       const to = (t[0].billing && t[0].billing.email) || t[0].contact_email;
       if (to) {
