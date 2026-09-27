@@ -160,7 +160,7 @@
       LV.publicCall('set_password', { token: token, password: p1 }).then(function (r) {
         if (!(r.data && r.data.ok)) {
           $('btnSet').disabled = false; $('btnSet').textContent = 'Passwort speichern und anmelden';
-          if (r.data && r.data.error === 'invalid_token') $('lnkNew').classList.remove('hide');
+          if (r.data && (r.data.error === 'invalid_token' || r.data.error === 'invite_used')) $('lnkNew').classList.remove('hide');
           return msg($('setMsg'), 'err', LV.errText(r));
         }
         return LV.signIn(r.data.email, p1).then(function (res) {

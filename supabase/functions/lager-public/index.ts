@@ -51,6 +51,19 @@ async function gotrue(path: string, method: string, body?: unknown) {
   const txt = await r.text(); let data: any = null; try { data = txt ? JSON.parse(txt) : null; } catch { /* */ }
   return { ok: r.ok, status: r.status, data };
 }
+function clientIp(req: Request): string {
+  const xf = req.headers.get("x-forwarded-for") || "";
+  return (xf.split(",")[0] || req.headers.get("cf-connecting-ip") || "unknown").trim().slice(0, 64);
+}
+// true = Limit erreicht; record=true zählt diesen Versuch gleich mit
+async function rateHit(kind: string, key: string, max: number, window: string, record = true): Promise<boolean> {
+  const r = await sql`select count(*)::int as n from lager.rate_events where kind = ${kind} and key = ${key} and created_at > now() - ${window}::interval`;
+  if (r[0].n >= max) return true;
+  if (record) await sql`insert into lager.rate_events (kind, key) values (${kind}, ${key})`;
+  if (Math.random() < 0.02) await sql`delete from lager.rate_events where created_at < now() - interval '2 days'`;
+  return false;
+}
+
 async function passwordOk(email: string, password: string) {
   const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
     method: "POST", headers: { apikey: SERVICE, "Content-Type": "application/json" },
@@ -123,6 +136,7 @@ Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
   let body: Record<string, any>;
   try { body = await req.json(); } catch { return json({ error: "bad_json" }, 400); }
+  if (!body || typeof body !== "object" || Array.isArray(body)) return json({ error: "bad_json" }, 400);
   const action = String(body?.action ?? "").trim();
 
   try {
@@ -136,8 +150,10 @@ Deno.serve(async (req: Request) => {
       if (company.length < 2) return json({ error: "bad_company" }, 400);
       if (!EMAIL_RE.test(email)) return json({ error: "bad_email" }, 400);
       if (password.length < 8 || password.length > 200) return json({ error: "bad_password" }, 400);
+      // Rate-Limits: je IP (Anlage-Spam) und je E-Mail (Passwort-Raten über bestehende Konten); global nur als Notbremse.
+      if (await rateHit("register_ip", clientIp(req), 10, "1 hour")) return json({ error: "rate_limited" }, 429);
       const recent = await sql`select count(*)::int as n from lager.tenants where created_at > now() - interval '1 hour'`;
-      if (recent[0].n >= 30) return json({ error: "rate_limited" }, 429);
+      if (recent[0].n >= 200) return json({ error: "rate_limited" }, 429);
 
       let uid: string;
       const au = await sql`select id from auth.users where lower(email) = ${email} limit 1`;
@@ -145,7 +161,11 @@ Deno.serve(async (req: Request) => {
         // Nutzer existiert bereits (anderes Vaydena-Produkt oder frühere Registrierung): Passwort muss stimmen
         const member = await sql`select tenant_id from lager.members where id = ${au[0].id} limit 1`;
         if (member.length) return json({ error: "already_registered" }, 400);
-        if (!(await passwordOk(email, password))) return json({ error: "email_exists" }, 400);
+        if (await rateHit("register_pw", email, 5, "1 hour", false)) return json({ error: "rate_limited" }, 429);
+        if (!(await passwordOk(email, password))) {
+          await sql`insert into lager.rate_events (kind, key) values ('register_pw', ${email})`;
+          return json({ error: "email_exists" }, 400);
+        }
         uid = String(au[0].id);
       } else {
         const cr = await gotrue("admin/users", "POST", { email, password, email_confirm: true, user_metadata: { name, company } });
@@ -194,12 +214,25 @@ Deno.serve(async (req: Request) => {
       const password = String(body.password ?? "");
       if (!/^[0-9a-f]{64}$/.test(token)) return json({ error: "invalid_token" }, 400);
       if (password.length < 8 || password.length > 200) return json({ error: "bad_password" }, 400);
-      const rows = await sql`select token_hash, user_id, email, purpose from lager.auth_tokens where token_hash = ${await sha256hex(token)} and used_at is null and expires_at > now() limit 1`;
+      // Token atomar einlösen: zwei parallele Aufrufe können ihn nicht beide verwenden
+      const hash = await sha256hex(token);
+      const rows = await sql`update lager.auth_tokens set used_at = now() where token_hash = ${hash} and used_at is null and expires_at > now()
+        returning user_id, email, purpose`;
       if (!rows.length) return json({ error: "invalid_token" }, 400);
-      const r = await gotrue(`admin/users/${rows[0].user_id}`, "PUT", { password, email_confirm: true });
-      if (!r.ok) return json({ error: "update_failed" }, 400);
-      await sql`update lager.auth_tokens set used_at = now() where token_hash = ${rows[0].token_hash}`;
-      return json({ ok: true, email: rows[0].email, purpose: rows[0].purpose });
+      const tok = rows[0];
+      const u = await sql`select u.email, u.last_sign_in_at, m.auth_created from auth.users u join lager.members m on m.id = u.id where u.id = ${tok.user_id} limit 1`;
+      // Nur Lager-Mitglieder mit unveränderter E-Mail. Einladungs-Links setzen nur bei neu angelegten, noch nie
+      // benutzten Konten ein Passwort – ein geteiltes Vaydena-Konto kann darüber nicht übernommen werden.
+      if (!u.length || String(u[0].email || "").toLowerCase() !== String(tok.email).toLowerCase()) return json({ error: "invalid_token" }, 400);
+      if (tok.purpose === "invite" && (u[0].auth_created !== true || u[0].last_sign_in_at)) return json({ error: "invite_used" }, 400);
+      const r = await gotrue(`admin/users/${tok.user_id}`, "PUT", { password, email_confirm: true });
+      if (!r.ok) {
+        await sql`update lager.auth_tokens set used_at = null where token_hash = ${hash}`;
+        return json({ error: "update_failed" }, 400);
+      }
+      // übrige offene Links dieses Kontos entwerten
+      await sql`update lager.auth_tokens set used_at = now() where user_id = ${tok.user_id} and used_at is null`;
+      return json({ ok: true, email: tok.email, purpose: tok.purpose });
     }
 
     if (action === "check_token") {

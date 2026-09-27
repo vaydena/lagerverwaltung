@@ -124,6 +124,19 @@ async function gotrue(path: string, method: string, body?: unknown) {
   let data: any = null; try { data = txt ? JSON.parse(txt) : null; } catch { /* ignore */ }
   return { ok: r.ok, status: r.status, data };
 }
+// Auth-Konto darf nur gelöscht werden, wenn die Lagerverwaltung es selbst angelegt hat (Einladung),
+// es nie benutzt wurde und kein anderes Vaydena-Produkt es kennt (auth.users ist geteilt).
+async function authDeletable(uid: string): Promise<boolean> {
+  const r = await sql`select m.auth_created, u.last_sign_in_at from lager.members m join auth.users u on u.id = m.id where m.id = ${uid} limit 1`;
+  if (!r.length || r[0].auth_created !== true || r[0].last_sign_in_at) return false;
+  for (const tbl of ["public.profiles", "schulung.members", "punkto.users"]) {
+    const reg = await sql`select to_regclass(${tbl}) as r`;
+    if (!reg[0].r) continue;
+    const x = await sql.unsafe(`select 1 from ${tbl} where id = $1 limit 1`, [uid]);
+    if (x.length) return false;
+  }
+  return true;
+}
 async function sha256hex(s: string) {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -434,18 +447,26 @@ Deno.serve(async (req: Request) => {
       if (cnt[0].n >= plan.users) return json({ error: "limit_users", limit: plan.users }, 400);
       const ex = await sql`select id from lager.members where tenant_id = ${tid} and lower(email) = ${email} limit 1`;
       if (ex.length) return json({ error: "already_member" }, 400);
-      let uid: string | null = null;
+      // Bestehendes Konto (auth.users ist mit anderen Vaydena-Produkten geteilt): KEIN Passwort-Link –
+      // sonst könnte ein Firmen-Admin fremde Konten übernehmen. Die Person meldet sich mit ihrem Passwort an.
       const au = await sql`select id from auth.users where lower(email) = ${email} limit 1`;
-      if (au.length) uid = String(au[0].id);
-      else {
-        const tmp = "Lv-" + randomToken(9) + "!x";
-        const cr = await gotrue("admin/users", "POST", { email, password: tmp, email_confirm: true, user_metadata: { name, invited_by: t.name } });
-        uid = cr?.data?.id || null;
-        if (!cr.ok || !uid) return json({ error: "auth_create_failed", detail: cr?.data?.msg || cr?.status }, 400);
+      if (au.length) {
+        const uid = String(au[0].id);
+        const other = await sql`select tenant_id from lager.members where id = ${uid} limit 1`;
+        if (other.length) return json({ error: "member_elsewhere" }, 400);
+        await sql`insert into lager.members (id, tenant_id, role, name, email, active, auth_created) values (${uid}, ${tid}, ${role}, ${name || null}, ${email}, true, false)`;
+        const appLink = `${SITE}/app.html`;
+        const resetLink = `${SITE}/anmelden.html#passwort`;
+        const r = await sendMail(email, `Sie wurden zu ${PRODUCT} hinzugefügt`,
+          `Guten Tag${name ? " " + name : ""},\n\n${t.name} hat Sie zu ${PRODUCT} hinzugefügt.\nSie haben bereits ein Vaydena-Konto mit dieser E-Mail-Adresse. Bitte melden Sie sich mit Ihrem bisherigen Passwort an:\n${appLink}\n\nPasswort vergessen? ${resetLink}\n\nFalls Sie das nicht erwartet haben, können Sie diese E-Mail ignorieren – ohne Ihre Anmeldung erhält niemand Zugriff auf Ihr Konto.\n\nViele Grüße\n${PRODUCT}`,
+          mailShell(`Willkommen bei ${PRODUCT}`, `<p>Guten Tag${name ? " " + esc(name) : ""},</p><p><b>${esc(t.name)}</b> hat Sie zur Lagerverwaltung hinzugefügt.</p><p>Sie haben bereits ein Vaydena-Konto mit dieser E-Mail-Adresse. Bitte melden Sie sich mit Ihrem bisherigen Passwort an.</p><p style="margin:22px 0"><a href="${esc(appLink)}" style="background:#0e6f6b;color:#fff;text-decoration:none;padding:12px 20px;border-radius:10px;font-weight:700;display:inline-block">Zur App</a></p><p style="font-size:13px;color:#5c7883">Passwort vergessen? <a href="${esc(resetLink)}">Neues Passwort anfordern</a></p>`));
+        return json({ ok: true, existing_account: true, emailed: !!r.ok });
       }
-      const other = await sql`select tenant_id from lager.members where id = ${uid} limit 1`;
-      if (other.length) return json({ error: "member_elsewhere" }, 400);
-      await sql`insert into lager.members (id, tenant_id, role, name, email, active) values (${uid}, ${tid}, ${role}, ${name || null}, ${email}, true)`;
+      const tmp = "Lv-" + randomToken(9) + "!x";
+      const cr = await gotrue("admin/users", "POST", { email, password: tmp, email_confirm: true, user_metadata: { name, invited_by: t.name } });
+      const uid: string | null = cr?.data?.id || null;
+      if (!cr.ok || !uid) return json({ error: "auth_create_failed", detail: cr?.data?.msg || cr?.status }, 400);
+      await sql`insert into lager.members (id, tenant_id, role, name, email, active, auth_created) values (${uid}, ${tid}, ${role}, ${name || null}, ${email}, true, true)`;
       const token = randomToken(32);
       await sql`insert into lager.auth_tokens (token_hash, user_id, email, purpose, expires_at) values (${await sha256hex(token)}, ${uid}, ${email}, 'invite', now() + interval '7 days')`;
       const link = `${SITE}/anmelden.html?invite=${token}`;
@@ -474,10 +495,10 @@ Deno.serve(async (req: Request) => {
       if (mid === me.id) return json({ error: "cannot_remove_self" }, 400);
       const row = await sql`select id from lager.members where id = ${mid} and tenant_id = ${tid} limit 1`;
       if (!row.length) return json({ error: "not_found" }, 404);
+      const deletable = await authDeletable(mid);
       await sql`delete from lager.members where id = ${mid} and tenant_id = ${tid}`;
-      // Auth-Nutzer nur löschen, wenn er nicht in einem anderen Vaydena-Produkt genutzt wird
-      const elsewhere = await sql`select 1 from schulung.members where id = ${mid} limit 1`;
-      if (!elsewhere.length) { try { await gotrue(`admin/users/${mid}`, "DELETE"); } catch (_e) { /* ignore */ } }
+      await sql`update lager.auth_tokens set used_at = now() where user_id = ${mid} and used_at is null`;
+      if (deletable) { try { await gotrue(`admin/users/${mid}`, "DELETE"); } catch (_e) { /* ignore */ } }
       return json({ ok: true });
     }
 

@@ -1548,6 +1548,16 @@
       if (!okRes(res)) return err(apiErr(res));
       var link = res.data.invite_link || "";
       App.team.list = null; loadTeam(true); LVSync.schedule(800);
+      if (res.data.existing_account) {
+        return modal({
+          title: "Mitglied hinzugefügt",
+          body: '<p><b>' + esc(v.name) + '</b> ist als ' + esc(roleLabel(v.role === "admin" ? "admin" : "mitarbeiter")) + ' angelegt.</p>' +
+            '<p>Für <b>' + esc(v.email) + '</b> gibt es bereits ein Vaydena-Konto. Die Person meldet sich mit ihrem bisherigen Passwort an' +
+            (res.data.emailed ? ' und wurde per E-Mail benachrichtigt.' : ' – bitte ihr Bescheid geben (E-Mail-Versand war nicht möglich).') + '</p>' +
+            '<p class="note">Passwort vergessen? Auf der Anmeldeseite „Passwort vergessen“ wählen.</p>',
+          foot: '<button class="btn primary" type="button" data-act="modal-close">Fertig</button>'
+        });
+      }
       modal({
         title: "Einladung erstellt",
         body: '<p><b>' + esc(v.name) + '</b> ist als ' + esc(roleLabel(v.role === "admin" ? "admin" : "mitarbeiter")) + ' angelegt.' +

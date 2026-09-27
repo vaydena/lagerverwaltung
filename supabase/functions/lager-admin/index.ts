@@ -27,6 +27,19 @@ const PLANS: Record<string, Plan> = {
   business: { label: "Business", users: 30, items: 1000000, price: { monat: 9900, jahr: 99000 } },
 };
 
+// Auth-Konto darf nur gelöscht werden, wenn die Lagerverwaltung es selbst angelegt hat (Einladung),
+// es nie benutzt wurde und kein anderes Vaydena-Produkt es kennt (auth.users ist geteilt).
+async function authDeletable(uid: string): Promise<boolean> {
+  const r = await sql`select m.auth_created, u.last_sign_in_at from lager.members m join auth.users u on u.id = m.id where m.id = ${uid} limit 1`;
+  if (!r.length || r[0].auth_created !== true || r[0].last_sign_in_at) return false;
+  for (const tbl of ["public.profiles", "schulung.members", "punkto.users"]) {
+    const reg = await sql`select to_regclass(${tbl}) as r`;
+    if (!reg[0].r) continue;
+    const x = await sql.unsafe(`select 1 from ${tbl} where id = $1 limit 1`, [uid]);
+    if (x.length) return false;
+  }
+  return true;
+}
 async function sha256hex(s: string) {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -272,12 +285,14 @@ Deno.serve(async (req: Request) => {
       if (!t.length) return json({ error: "not_found" }, 404);
       if (str(body.confirm, 200) !== t[0].name) return json({ error: "confirm_mismatch" }, 400);
       const members = await sql`select id from lager.members where tenant_id = ${id}`;
+      const deletable: string[] = [];
+      for (const m of members) if (await authDeletable(String(m.id))) deletable.push(String(m.id));
       await sql`delete from lager.tenants where id = ${id}`;
+      const ids = members.map((m: any) => String(m.id));
+      if (ids.length) await sql`update lager.auth_tokens set used_at = now() where user_id = any(${ids}::uuid[]) and used_at is null`;
       let deletedUsers = 0;
-      for (const m of members) {
-        const elsewhere = await sql`select 1 from schulung.members where id = ${m.id} limit 1`;
-        if (elsewhere.length) continue;
-        const r = await gotrue(`admin/users/${m.id}`, "DELETE");
+      for (const uid of deletable) {
+        const r = await gotrue(`admin/users/${uid}`, "DELETE");
         if (r.ok) deletedUsers++;
       }
       return json({ ok: true, deleted_users: deletedUsers, members: members.length });

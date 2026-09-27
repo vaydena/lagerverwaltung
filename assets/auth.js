@@ -108,6 +108,7 @@
     auth_create_failed: "Das Konto konnte nicht angelegt werden. Bitte später erneut versuchen.",
     rate_limited: "Zu viele Versuche. Bitte in einer Stunde erneut versuchen.",
     invalid_token: "Dieser Link ist ungültig oder abgelaufen. Bitte einen neuen anfordern.",
+    invite_used: "Diese Einladung wurde bereits verwendet. Bitte mit dem bestehenden Passwort anmelden oder „Passwort vergessen“ nutzen.",
     update_failed: "Das Passwort konnte nicht gesetzt werden. Bitte erneut versuchen.",
     not_found: "Nicht gefunden.",
     not_registered: "Für dieses Konto gibt es noch keinen Lager-Zugang.",
