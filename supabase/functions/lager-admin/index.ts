@@ -23,7 +23,7 @@ type Plan = { label: string; users: number; items: number; price: { monat: numbe
 // users: 0 = kein Nutzerlimit. Business ist nicht mehr öffentlich buchbar, nur noch über den Betreiber-Bereich.
 const PLANS: Record<string, Plan> = {
   trial:    { label: "Test",     users: 0,  items: 25000,   price: { monat: 0,    jahr: 0 } },
-  starter:  { label: "Starter",  users: 0,  items: 2500,    price: { monat: 900,  jahr: 9000 } },
+  starter:  { label: "Starter",  users: 3,  items: 2500,   price: { monat: 900,  jahr: 9000 } },
   team:     { label: "Team",     users: 0,  items: 25000,   price: { monat: 1900, jahr: 19000 } },
   business: { label: "Business", users: 0,  items: 1000000, price: { monat: 9900, jahr: 99000 } },
 };

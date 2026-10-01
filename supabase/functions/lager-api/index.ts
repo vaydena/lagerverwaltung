@@ -21,13 +21,16 @@ const SITE = "https://lagerverwaltung.vaydena.de";
 const PRODUCT = "Vaydena Lager";
 const OPERATOR_MAIL = "kontakt@vaydena.de";
 
-type Plan = { label: string; users: number; items: number; price: { monat: number; jahr: number } };
+type Plan = { label: string; users: number; items: number; price: { monat: number; jahr: number }; feats: string[] };
+// Funktionen, die erst ab Team freigeschaltet sind. picklist und reorder (Bestellvorschlag) laufen nur im
+// Browser und werden dort gesperrt; alle anderen prüft zusätzlich der Server.
+const TEAM_FEATS = ["roles", "audit", "lots", "reorder", "picklist", "period_export", "images"];
 // users: 0 = kein Nutzerlimit. Business ist nicht mehr öffentlich buchbar, nur noch über den Betreiber-Bereich.
 const PLANS: Record<string, Plan> = {
-  trial:    { label: "Test",     users: 0,  items: 25000,   price: { monat: 0,    jahr: 0 } },
-  starter:  { label: "Starter",  users: 0,  items: 2500,    price: { monat: 900,  jahr: 9000 } },
-  team:     { label: "Team",     users: 0,  items: 25000,   price: { monat: 1900, jahr: 19000 } },
-  business: { label: "Business", users: 0,  items: 1000000, price: { monat: 9900, jahr: 99000 } },
+  trial:    { label: "Test",     users: 0,  items: 25000,   price: { monat: 0,    jahr: 0 },     feats: TEAM_FEATS },
+  starter:  { label: "Starter",  users: 3,  items: 2500,    price: { monat: 900,  jahr: 9000 },  feats: [] },
+  team:     { label: "Team",     users: 0,  items: 25000,   price: { monat: 1900, jahr: 19000 }, feats: TEAM_FEATS },
+  business: { label: "Business", users: 0,  items: 1000000, price: { monat: 9900, jahr: 99000 }, feats: TEAM_FEATS },
 };
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const GRACE_DAYS = 7;
@@ -89,7 +92,8 @@ function tenantOut(t: any) {
     paid_until: ymd(t.paid_until) || null, paid_until_dmy: dmy(t.paid_until),
     billing: t.billing || {}, code_prefix: t.code_prefix, settings: t.settings || {},
     contact_email: t.contact_email || null,
-    limits: { users: p.users, items: p.items }, sub: subState(t),
+    limits: { users: p.users, items: p.items },
+    features: Object.fromEntries(TEAM_FEATS.map((f) => [f, p.feats.includes(f)])), sub: subState(t),
   };
 }
 function esc(s: unknown) { return String(s == null ? "" : s).replace(/[&<>]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[ch] as string)); }
@@ -319,7 +323,7 @@ async function bump(tx: any, tid: string, item: string, loc: string, d: number) 
   await tx`insert into lager.stock (tenant_id, item_id, location_id, qty) values (${tid}, ${item}, ${loc}, ${d})
     on conflict (tenant_id, item_id, location_id) do update set qty = lager.stock.qty + ${d}, updated_at = now()`;
 }
-async function applyMovement(tid: string, memberId: string, deviceId: string | null, m: any, itemOk: (id: string) => boolean, locOk: (id: string) => boolean, allowNeg: boolean): Promise<Res> {
+async function applyMovement(tid: string, memberId: string, deviceId: string | null, m: any, itemOk: (id: string) => boolean, locOk: (id: string) => boolean, allowNeg: boolean, allowLots: boolean): Promise<Res> {
   const id = String(m?.id || "").toLowerCase();
   if (!UUID_RE.test(id)) return { id, ok: false, error: "bad_id" };
   const type = String(m.type || "");
@@ -340,9 +344,12 @@ async function applyMovement(tid: string, memberId: string, deviceId: string | n
   const note = strOrNull(m.note, 500);
   const createdAt = isoOrNow(m.created_at);
   // Charge / MHD (nicht bei Inventur)
-  const lot = type === "count" ? null : strOrNull(m.lot, 60);
+  // Ohne Chargen-Funktion (Starter) entstehen keine neuen Chargen: die Angabe wird beim Eingang verworfen,
+  // die Buchung selbst bleibt gültig. Vorhandene Chargen lassen sich weiter abbauen und umlagern.
+  const newLots = allowLots || type !== "in";
+  const lot = type === "count" || !newLots ? null : strOrNull(m.lot, 60);
   const bbRaw = String(m.best_before || "");
-  const bb = type !== "count" && /^\d{4}-\d{2}-\d{2}$/.test(bbRaw) && Number.isFinite(Date.parse(bbRaw)) ? bbRaw : null;
+  const bb = type !== "count" && newLots && /^\d{4}-\d{2}-\d{2}$/.test(bbRaw) && Number.isFinite(Date.parse(bbRaw)) ? bbRaw : null;
   // Storno: Gegenbuchung zu einer bestehenden Buchung desselben Artikels
   let reverses: string | null = null;
   if (m.reverses) {
@@ -434,9 +441,9 @@ async function applyMovement(tid: string, memberId: string, deviceId: string | n
         else {
           moved = await lotTake(loc, lot, q);
           // ohne passende Charge am Quellort: Angabe trotzdem am Ziel führen
-          if (type === "transfer" && !moved.length && (lot || bb)) moved = [{ lot: lot || "", bb, n: q }];
+          if (allowLots && type === "transfer" && !moved.length && (lot || bb)) moved = [{ lot: lot || "", bb, n: q }];
         }
-      } else if (type === "transfer" && (lot || bb)) moved = [{ lot: lot || "", bb, n: q }];
+      } else if (allowLots && type === "transfer" && (lot || bb)) moved = [{ lot: lot || "", bb, n: q }];
       if (type === "transfer") {
         await lockRow(toLoc!);
         if (!(await countedAfter(toLoc!))) {
@@ -486,6 +493,8 @@ Deno.serve(async (req: Request) => {
     const tid = me.tenant_id as string;
     const t = me.tenant;
     const plan = PLANS[t.plan] || PLANS.trial;
+    const feat = (f: string) => plan.feats.includes(f);
+    const locked = (f: string) => json({ error: "feature_locked", feature: f }, 403);
 
     // -------- me --------
     if (action === "me") {
@@ -584,7 +593,7 @@ Deno.serve(async (req: Request) => {
       if (locIds.length) for (const r of await sql`select id from lager.locations where tenant_id = ${tid} and id = any(${locIds}::uuid[])`) okLocs.add(String(r.id));
       const allowNeg = (t.settings || {}).negative_stock !== false;
       for (const r of icodes) out.item_codes.push(await safeRec(r, () => upsertItemCode(tid, r, (id) => okItems.has(id))));
-      for (const m of movs) out.movements.push(await safeRec(m, () => applyMovement(tid, me.id, deviceId, m, (id) => okItems.has(id), (id) => okLocs.has(id), allowNeg)));
+      for (const m of movs) out.movements.push(await safeRec(m, () => applyMovement(tid, me.id, deviceId, m, (id) => okItems.has(id), (id) => okLocs.has(id), allowNeg, feat("lots"))));
       // Protokoll: Löschungen und Stornos
       const okIds = (arr: Res[]) => new Set(arr.filter((r) => r.ok && !r.dup && !r.stale).map((r) => r.id));
       const okL = okIds(out.locations), okI = okIds(out.items), okM = okIds(out.movements);
@@ -605,7 +614,8 @@ Deno.serve(async (req: Request) => {
       if (!isAdmin) return json({ error: "forbidden" }, 403);
       const name = str(body.name, 120);
       const email = str(body.email, 200).toLowerCase();
-      const role = body.role === "admin" ? "admin" : "mitarbeiter";
+      // Ohne Rollen-Funktion (Starter) sind alle Nutzer gleichberechtigt
+      const role = body.role === "admin" || !feat("roles") ? "admin" : "mitarbeiter";
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json({ error: "bad_email" }, 400);
       const cnt = await sql`select count(*)::int as n from lager.members where tenant_id = ${tid} and active = true`;
       if (plan.users > 0 && cnt[0].n >= plan.users) return json({ error: "limit_users", limit: plan.users }, 400);
@@ -650,6 +660,8 @@ Deno.serve(async (req: Request) => {
       if (!row.length) return json({ error: "not_found" }, 404);
       const role = body.role === "admin" ? "admin" : (body.role === "mitarbeiter" ? "mitarbeiter" : null);
       const active = typeof body.active === "boolean" ? body.active : null;
+      // Bestehende Mitarbeiter-Rollen bleiben nach einem Tarifwechsel erhalten; neu vergeben lässt sich ohne Rollen nur Administrator
+      if (role === "mitarbeiter" && row[0].role !== "mitarbeiter" && !feat("roles")) return locked("roles");
       if (role !== null) await sql`update lager.members set role = ${role}, updated_at = now() where id = ${mid}`;
       if (active === true) {
         const cnt = await sql`select count(*)::int as n from lager.members where tenant_id = ${tid} and active = true and id <> ${mid}`;
@@ -705,7 +717,7 @@ Deno.serve(async (req: Request) => {
           label_format: has("label_format") ? str(s.label_format, 40) : (old.label_format || ""),
           label_type: has("label_type") ? (s.label_type === "code128" ? "code128" : "qr") : (old.label_type || "qr"),
           negative_stock: has("negative_stock") ? s.negative_stock !== false : old.negative_stock !== false,
-          low_stock_mail: has("low_stock_mail") ? s.low_stock_mail === true : old.low_stock_mail === true,
+          low_stock_mail: feat("reorder") && (has("low_stock_mail") ? s.low_stock_mail === true : old.low_stock_mail === true),
           low_stock_mail_to: mailTo,
           expiry_days: Number.isFinite(ed) ? Math.max(1, Math.min(365, Math.round(ed))) : 30,
         };
@@ -769,6 +781,8 @@ Deno.serve(async (req: Request) => {
         await sql`delete from lager.item_images where item_id = ${iid} and tenant_id = ${tid}`;
         return json({ ok: true });
       }
+      // Vorhandene Bilder bleiben sichtbar und löschbar; neue gibt es nur mit der Funktion
+      if (!feat("images")) return locked("images");
       const data = String(body.data || "");
       if (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(data)) return json({ error: "bad_image" }, 400);
       if (data.length > IMG_MAX) return json({ error: "image_too_large" }, 400);
@@ -782,7 +796,8 @@ Deno.serve(async (req: Request) => {
     // -------- Protokoll --------
     if (action === "list_audit") {
       if (!isAdmin) return json({ error: "forbidden" }, 403);
-      const before = Number(body.before) > 0 ? Math.floor(Number(body.before)) : null;
+      if (!feat("audit")) return locked("audit");
+      const before =Number(body.before) > 0 ? Math.floor(Number(body.before)) : null;
       const rows = before
         ? await sql`select id, actor, action, detail, created_at from lager.audit where tenant_id = ${tid} and id < ${before} order by id desc limit 100`
         : await sql`select id, actor, action, detail, created_at from lager.audit where tenant_id = ${tid} order by id desc limit 100`;
@@ -792,6 +807,7 @@ Deno.serve(async (req: Request) => {
     // -------- Journal-Export (Zeitraum, deutsche Kalendertage) --------
     if (action === "export_movements") {
       if (!isAdmin) return json({ error: "forbidden" }, 403);
+      if (!feat("period_export")) return locked("period_export");
       const from = ymdOk(body.from); const to = ymdOk(body.to);
       if (!from || !to || from > to) return json({ error: "bad_range" }, 400);
       const rows = await sql`select m.id, m.created_at, m.type, m.qty::float8 as qty, m.delta::float8 as delta, m.note, m.lot,

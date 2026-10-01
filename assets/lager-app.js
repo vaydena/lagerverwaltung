@@ -70,7 +70,7 @@
     insufficient_stock: "Nicht genug Bestand – negativer Bestand ist in den Einstellungen gesperrt.", bad_value: "Ungültiger Wert (z. B. Zahl zu groß).",
     sku_exists: "Die Artikelnummer ist bereits vergeben.", barcode_exists: "Der Barcode ist bereits einem anderen Artikel zugeordnet.",
     code_exists: "Der Code ist bereits vergeben.", code_required: "Code fehlt.", name_required: "Name fehlt.", sku_required: "Artikelnummer fehlt.",
-    bad_id: "Ungültige ID.", bad_plan: "Ungültiger Tarif.", cannot_edit_self: "Die eigene Rolle kann nicht geändert werden.",
+    bad_id: "Ungültige ID.", bad_plan: "Ungültiger Tarif.", feature_locked: "Diese Funktion ist im Team-Paket enthalten.", cannot_edit_self: "Die eigene Rolle kann nicht geändert werden.",
     cannot_remove_self: "Der eigene Zugang kann nicht entfernt werden.", bad_member: "Ungültiges Teammitglied.", bad_name: "Der Firmenname ist zu kurz.",
     bad_reverse: "Diese Buchung kann nicht storniert werden.", reverse_not_found: "Die ursprüngliche Buchung wurde auf dem Server nicht gefunden.",
     already_reversed: "Diese Buchung wurde bereits storniert.", bad_image: "Ungültiges Bild (nur JPEG, PNG oder WebP).", image_too_large: "Das Bild ist zu groß.",
@@ -117,6 +117,25 @@
   function isAdmin() { return !!(S.member && S.member.role === "admin"); }
   function negAllowed() { return settings().negative_stock !== false; }
   function itemLimit() { return (S.tenant && S.tenant.limits && S.tenant.limits.items) || 1000000; }
+  // Funktionen des Tarifs (der Server prüft selbst). Gespeicherte Mandantendaten ohne Angabe gelten als freigeschaltet.
+  function feat(k) { var f = S.tenant && S.tenant.features; return !f || f[k] !== false; }
+  var FEAT_TXT = {
+    roles: "Im Starter-Paket sind alle Nutzer gleichberechtigt. Die Rolle „Mitarbeiter“ mit eingeschränkten Rechten gibt es im Team-Paket.",
+    audit: "Das Protokoll zeigt, wer wann Artikel oder Lagerorte gelöscht, Buchungen storniert oder Team und Firmendaten geändert hat.",
+    lots: "Chargen und Mindesthaltbarkeit je Buchung erfassen; beim Ausgang wird die älteste Charge zuerst entnommen.",
+    reorder: "Der Bestellvorschlag listet alle Artikel unter Mindestbestand je Lieferant. Dazu kommt auf Wunsch eine tägliche E-Mail.",
+    picklist: "Mit der Pickliste sammeln Sie mehrere Ausgänge und buchen sie gemeinsam.",
+    period_export: "Der Zeitraum-Export liefert alle Buchungen eines Zeitraums vom Server, auch ältere.",
+    images: "Ein Foto je Artikel hilft beim Wiederfinden."
+  };
+  function teamNote(k) { return '<p class="note">' + esc(FEAT_TXT[k]) + ' Im Team-Paket enthalten.</p>'; }
+  // true = Funktion im Tarif gesperrt, Hinweis wurde gezeigt
+  function needTeam(k) {
+    if (feat(k)) return false;
+    modal({ title: "Im Team-Paket enthalten", body: '<p>' + esc(FEAT_TXT[k]) + '</p>' + (isAdmin() ? "" : '<p class="help">Den Tarif wechselt ein Administrator unter „Firma“.</p>'),
+      foot: '<button class="btn ghost" type="button" data-act="modal-close">Schließen</button>' + (isAdmin() ? '<button class="btn primary" type="button" data-act="go-plans">Tarife ansehen</button>' : "") });
+    return true;
+  }
   var TYPES = { "in": "Eingang", out: "Ausgang", transfer: "Umlagerung", count: "Zählung" };
   function typeLabel(t) { return TYPES[t] || t; }
   function locShort(id) { var l = S.locations.get(id); return l ? l.code : "?"; }
@@ -240,6 +259,7 @@
   }
   ACTIONS["confirm-ok"] = function () { if (App.modal && App.modal._confirm) App.modal._confirm(); };
   ACTIONS["modal-close"] = function () { closeModal(); };
+  ACTIONS["go-plans"] = function () { closeModal(); location.hash = "#firma"; };
   ACTIONS["welcome-new-item"] = function () { closeModal(); nav("artikel/neu"); };
   ACTIONS["modal-bg"] = function (el, e) { if (e && e.target === el) closeModal(); };
 
@@ -769,6 +789,7 @@
   function scanLotHtml(it) {
     var sc = App.scan; if (sc.type === "count") return "";
     if (sc.type === "in") {
+      if (!feat("lots")) { sc.lot = ""; sc.bb = ""; return ""; }
       var open = !!(sc.lot || sc.bb);
       return '<details class="lotbox"' + (open ? " open" : "") + '><summary>Charge / MHD (optional)</summary><div class="f2">' +
         '<div class="field"><label for="scanLot">Charge</label><input id="scanLot" type="text" maxlength="60" value="' + esc(sc.lot || "") + '" data-input="scan-lot" autocomplete="off" data-noenter></div>' +
@@ -909,6 +930,7 @@
     box.innerHTML = h;
   }
   ACTIONS["pick-add"] = function () {
+    if (needTeam("picklist")) return;
     var sc = App.scan, it = sc.item; if (!it) return;
     var q = parseQty(byId("scanQty") ? byId("scanQty").value : sc.qty);
     if (q == null || q <= 0 || q > 1e9) { toast("Die Menge muss größer als 0 sein.", "err"); return; }
@@ -1060,6 +1082,7 @@
   }
   INPUTS["img-file"] = function (el) {
     var id = el.getAttribute("data-id"), file = el.files && el.files[0]; if (!file) return;
+    if (needTeam("images")) { el.value = ""; return; }
     if (!onlineOr("Bilder lassen sich nur online speichern.")) { el.value = ""; return; }
     if (!/^image\//.test(file.type)) { toast("Bitte eine Bilddatei wählen.", "warn"); el.value = ""; return; }
     renderItemImg(id, null, "Bild wird gespeichert …");
@@ -1322,6 +1345,7 @@
     return rows;
   }
   ACTIONS["best-order"] = function () {
+    if (needTeam("reorder")) return;
     var rows = orderData(), h = "", last = null, sum = 0;
     if (!rows.length) { modal({ title: "Bestellvorschlag", body: '<p class="note">Kein Artikel liegt unter dem Mindestbestand.</p>', foot: '<button class="btn primary" type="button" data-act="modal-close">Schließen</button>' }); return; }
     h += '<p class="help">Alle aktiven Artikel unter Mindestbestand. Menge = Bestellmenge, mindestens aber die Differenz bis zum Mindestbestand.</p><div class="tblwrap"><table class="tbl"><thead><tr><th>Artikel</th><th class="num">Bestand</th><th class="num">Min.</th><th class="num">Bestellen</th><th class="num">Wert</th></tr></thead><tbody>';
@@ -1452,6 +1476,7 @@
   };
   // Export über den Server: alle Buchungen eines Zeitraums (auch ältere, die nicht mehr auf dem Gerät liegen)
   ACTIONS["j-export"] = function () {
+    if (needTeam("period_export")) return;
     var to = todayIso(), d = new Date(); d.setDate(1); var from = d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-01";
     modal({
       title: "Journal exportieren",
@@ -1894,7 +1919,7 @@
   // =====================================================================
   // Team (nur Administratoren)
   // =====================================================================
-  var APP_VERSION = "1.1 (2026-09-27)";
+  var APP_VERSION = "1.2 (2026-10-01)";
   var ROLES = { admin: "Administrator", mitarbeiter: "Mitarbeiter" };
   function roleLabel(r) { return ROLES[r] || r || "–"; }
   function onlineOr(msg) { if (navigator.onLine) return true; toast(msg || "Dafür ist eine Internetverbindung nötig.", "warn"); return false; }
@@ -1919,7 +1944,7 @@
         '<div class="txt"><div class="t">' + esc(m.name || m.email || "") + (self ? ' <span class="pill teal">Du</span>' : "") + (off ? ' <span class="pill grey">Deaktiviert</span>' : "") + '</div>' +
         '<div class="s">' + esc(m.email || "") + ' · ' + esc(roleLabel(m.role)) + (m.created_dmy ? ' · seit ' + esc(m.created_dmy) : "") + '</div></div>' +
         (self ? "" : '<div class="acts">' +
-          '<button class="btn ghost xs" type="button" data-act="member-role" data-id="' + esc(m.id) + '" data-role="' + (m.role === "admin" ? "mitarbeiter" : "admin") + '">' + (m.role === "admin" ? "Zum Mitarbeiter" : "Zum Admin") + '</button>' +
+          (!feat("roles") && m.role === "admin" ? "" : '<button class="btn ghost xs" type="button" data-act="member-role" data-id="' + esc(m.id) + '" data-role="' + (m.role === "admin" ? "mitarbeiter" : "admin") + '">' + (m.role === "admin" ? "Zum Mitarbeiter" : "Zum Admin") + '</button>') +
           '<button class="btn ghost xs" type="button" data-act="member-toggle" data-id="' + esc(m.id) + '" data-active="' + (off ? "1" : "0") + '">' + (off ? "Aktivieren" : "Deaktivieren") + '</button>' +
           '<button class="btn ghost xs danger" type="button" data-act="member-remove" data-id="' + esc(m.id) + '" aria-label="Entfernen" title="Aus dem Team entfernen">' + ic("trash") + '</button></div>') +
         '</div>';
@@ -1943,7 +1968,7 @@
       return '<div class="ph"><h1>Team</h1><div class="spacer"></div>' +
         '<button class="btn ghost sm" type="button" data-act="team-refresh" title="Neu laden">' + ic("refresh") + '</button>' +
         '<button class="btn primary sm" type="button" data-act="member-invite">' + ic("plus") + ' Einladen</button></div>' +
-        '<p class="help">Mitarbeiter scannen und buchen. Administratoren verwalten außerdem Lagerorte, Löschungen, Team, Firma und Abo. ' + (lim.users ? 'Der Tarif erlaubt ' + lim.users + ' aktive Nutzer.' : 'Die Zahl der Nutzer ist nicht begrenzt.') + '</p>' +
+        '<p class="help">' + (feat("roles") ? 'Mitarbeiter scannen und buchen. Administratoren verwalten außerdem Lagerorte, Löschungen, Team, Firma und Abo. ' : 'Im Starter-Paket sind alle Nutzer Administratoren und gleichberechtigt. Getrennte Rollen und unbegrenzt viele Nutzer gibt es im <a href="#firma">Team-Paket</a>. ') + (lim.users ? 'Der Tarif erlaubt ' + lim.users + ' aktive Nutzer.' : 'Die Zahl der Nutzer ist nicht begrenzt.') + '</p>' +
         '<div class="card"><div class="tools"><span class="cnt" id="teamCnt"></span></div><div class="list" id="teamList"></div></div>' +
         (navigator.onLine ? "" : '<p class="note">Offline – angezeigt wird der letzte bekannte Stand. Einladungen und Änderungen sind nur online möglich.</p>');
     },
@@ -1993,11 +2018,12 @@
   VIEWS.protokoll = {
     title: "Protokoll",
     render: function () {
+      if (!feat("audit")) return '<div class="ph"><h1>Protokoll</h1></div><div class="card">' + teamNote("audit") + '<div class="btnrow"><a class="btn primary sm" href="#firma">Tarife ansehen</a></div></div>';
       return '<div class="ph"><h1>Protokoll</h1><div class="spacer"></div><button class="btn ghost sm" type="button" data-act="audit-refresh" aria-label="Neu laden">' + ic("refresh") + '</button></div>' +
         '<p class="help">Wichtige Änderungen im Betrieb: Löschungen, Stornos, Team, Firmendaten und Tarif. Buchungen stehen im Journal.</p>' +
         '<div class="card"><div class="list" id="auditList"></div></div>';
     },
-    mount: function () { App.audit = { entries: null, more: false, loading: false }; loadAudit(false); },
+    mount: function () { App.audit = { entries: null, more: false, loading: false }; if (feat("audit")) loadAudit(false); },
     update: function () {}
   };
   ACTIONS["audit-more"] = function () { loadAudit(true); };
@@ -2012,7 +2038,8 @@
       body: '<form data-form="invite" id="inviteForm" novalidate>' +
         '<div class="field"><label>Name</label><input name="name" type="text" required maxlength="80" autocomplete="off"></div>' +
         '<div class="field"><label>E-Mail-Adresse</label><input name="email" type="email" required maxlength="120" autocomplete="off" inputmode="email"></div>' +
-        '<div class="field"><label>Rolle</label><select name="role"><option value="mitarbeiter">Mitarbeiter – scannen und buchen</option><option value="admin">Administrator – alles verwalten</option></select></div>' +
+        (feat("roles") ? '<div class="field"><label>Rolle</label><select name="role"><option value="mitarbeiter">Mitarbeiter – scannen und buchen</option><option value="admin">Administrator – alles verwalten</option></select></div>'
+          : '<input type="hidden" name="role" value="admin">' + teamNote("roles")) +
         '<div class="msg hide" id="inviteMsg"></div>' +
         '<div class="btnrow"><button class="btn ghost" type="button" data-act="modal-close">Abbrechen</button><button class="btn primary" type="submit" id="inviteBtn">Einladung erstellen</button></div></form>'
     });
@@ -2083,8 +2110,8 @@
   // Firma & Abo
   // =====================================================================
   var PLANS = {
-    starter: { label: "Starter", monat: 900, jahr: 9000, feats: ["Unbegrenzt viele Nutzer", "2.500 Artikel", "Beliebig viele Lagerorte", "Etiketten, Offline-Modus, Export", "E-Mail-Support"] },
-    team: { label: "Team", monat: 1900, jahr: 19000, hot: true, feats: ["Unbegrenzt viele Nutzer", "25.000 Artikel", "Alles aus Starter", "Journal je Nutzer und Gerät", "Bevorzugter Support"] }
+    starter: { label: "Starter", monat: 900, jahr: 9000, feats: ["Bis 3 Nutzer, alle gleichberechtigt", "2.500 Artikel", "Scannen, Buchen, Inventur, Etiketten", "Offline-Modus, CSV-Import, Export", "E-Mail-Support"] },
+    team: { label: "Team", monat: 1900, jahr: 19000, hot: true, feats: ["Unbegrenzt viele Nutzer mit Rollen", "25.000 Artikel", "Alles aus Starter", "Chargen und MHD, Artikelbilder", "Pickliste, Bestellvorschlag, tägliche E-Mail", "Protokoll und Zeitraum-Export", "Bevorzugter Support"] }
   };
   function invoiceLink(inv) { return "zahlung.html?r=" + encodeURIComponent(inv.access_token || ""); }
 
@@ -2225,8 +2252,9 @@
         '<div class="field"><label>Zusatzzeile auf Etiketten</label><input name="label_format" type="text" maxlength="40" value="' + esc(st.label_format || "") + '" placeholder="{firma}"><div class="hint">Platzhalter: {firma} {kategorie} {einheit} {sku} {name} {ean}</div></div>' +
         '<label class="check"><input type="checkbox" name="negative_stock"' + (st.negative_stock !== false ? " checked" : "") + '> Negativen Bestand zulassen (Ausgang auch buchen, wenn der Bestand nicht reicht)</label>' +
         '<div class="field"><label for="setExp">MHD-Warnfrist (Tage)</label><input id="setExp" name="expiry_days" type="number" min="1" max="365" value="' + esc(String(expiryDays())) + '"><div class="hint">Chargen, deren MHD innerhalb dieser Frist endet, werden im Bestand hervorgehoben.</div></div>' +
-        '<label class="check"><input type="checkbox" name="low_stock_mail"' + (st.low_stock_mail ? " checked" : "") + '> Täglich eine E-Mail mit Artikeln unter Mindestbestand senden</label>' +
-        '<div class="field"><label for="setMail">Empfänger der Bestandswarnung</label><input id="setMail" name="low_stock_mail_to" type="email" maxlength="200" value="' + esc(st.low_stock_mail_to || "") + '" placeholder="' + esc(t.contact_email || "") + '"><div class="hint">Leer = Kontakt-E-Mail des Betriebs.</div></div>' +
+        (feat("reorder") ? '<label class="check"><input type="checkbox" name="low_stock_mail"' + (st.low_stock_mail ? " checked" : "") + '> Täglich eine E-Mail mit Artikeln unter Mindestbestand senden</label>' +
+        '<div class="field"><label for="setMail">Empfänger der Bestandswarnung</label><input id="setMail" name="low_stock_mail_to" type="email" maxlength="200" value="' + esc(st.low_stock_mail_to || "") + '" placeholder="' + esc(t.contact_email || "") + '"><div class="hint">Leer = Kontakt-E-Mail des Betriebs.</div></div>'
+          : '<input type="hidden" name="low_stock_mail_to" value="' + esc(st.low_stock_mail_to || "") + '">' + teamNote("reorder")) +
         '<div class="btnrow"><button class="btn primary" type="submit">Speichern</button></div></form></div>';
       h += '<div class="card"><h2>Daten</h2><p class="help">Alle Daten gehören dem Betrieb und lassen sich jederzeit exportieren.</p>' +
         '<div class="btnrow"><button class="btn ghost sm" type="button" data-act="items-csv">' + ic("download") + ' Artikelliste (CSV)</button><button class="btn ghost sm" type="button" data-act="export-json">' + ic("download") + ' Komplettexport (JSON)</button></div></div>';

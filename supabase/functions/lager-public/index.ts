@@ -318,7 +318,7 @@ Deno.serve(async (req: Request) => {
       if (await rateHit("cron_low_stock", "all", 6, "1 hour")) return json({ error: "rate_limited" }, 429);
       const today = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Berlin" }).format(new Date());
       const tenants = await sql`select id, name, plan, trial_ends_at, paid_until, settings, contact_email from lager.tenants
-        where status = 'aktiv' and coalesce((settings->>'low_stock_mail')::boolean, false) = true
+        where status = 'aktiv' and plan <> 'starter' and coalesce((settings->>'low_stock_mail')::boolean, false) = true
           and (low_stock_mailed_on is null or low_stock_mailed_on < ${today}::date)
           and ((plan = 'trial' and trial_ends_at >= ${today}::date) or (plan <> 'trial' and paid_until + 7 >= ${today}::date))
         limit 200`;

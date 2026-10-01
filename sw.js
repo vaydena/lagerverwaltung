@@ -3,7 +3,7 @@
  * Supabase-/API-Aufrufe werden nie gecacht (fremder Origin -> gar nicht angefasst).
  * VERSION bei jedem Deploy erhöhen (siehe deploy-version.txt), dann tauscht der Browser den Cache aus.
  */
-var VERSION = "lv-2026-10-01-2";
+var VERSION = "lv-2026-10-01-3";
 var CACHE = "vaydena-lager-" + VERSION;
 var SHELL = [
   "app.html", "anmelden.html", "manifest.webmanifest",
