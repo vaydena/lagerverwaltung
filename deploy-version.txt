@@ -1,7 +1,7 @@
 lagerverwaltung.vaydena.de — Vaydena Lager (Lagerverwaltung mit Barcode-Scan, offline-faehige PWA)
 Marker: lv-v1-8d3f
 Erstdeploy: 2026-09-03 (Actions-Workflow oder deploy-local.ps1)
-Geschaeftsmodell: Abo je Firma - Starter 19 EUR, Team 49 EUR, Business 99 EUR pro Monat (Jahreszahlung = 10 Monatsraten), kostenlose Testphase
+Geschaeftsmodell: Abo je Firma - Starter 9 EUR, Team 19 EUR pro Monat, ohne Nutzerlimit (Jahreszahlung = 10 Monatsraten), kostenlose Testphase
 Zahlung: NUR Bankueberweisung + GiroCode (kein Stripe, kein PayPal)
 Seiten: index.html (Landingpage), registrieren.html, anmelden.html, app.html (PWA, Service Worker sw.js + manifest.webmanifest), zahlung.html, betreiber.html, impressum.html, datenschutz.html, agb.html
 Backend: Supabase xeuexovdipdiiuzjpzkj (Frankfurt), Schema lager, Edge Functions lager-api / lager-public / lager-admin

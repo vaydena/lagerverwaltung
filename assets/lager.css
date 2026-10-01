@@ -210,7 +210,7 @@ a.row:hover,button.row:hover{background:var(--bg-2);text-decoration:none}
 .sellist input{width:18px;height:18px;accent-color:var(--primary);flex:0 0 auto;margin:0}
 .sellist .s{color:var(--muted);font-size:.8rem;margin-left:auto;white-space:nowrap}
 .preview{display:grid;justify-items:center;padding:12px;background:var(--bg-2);border-radius:12px;overflow:auto}
-.plans{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:12px 0}
+.plans{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:12px 0}
 .plan{border:1.5px solid var(--line);border-radius:14px;padding:16px 12px;text-align:center;background:#fff}
 .plan.cur{border-color:var(--primary);background:var(--primary-l)}
 .plan .pn{font-weight:800;font-size:1rem}

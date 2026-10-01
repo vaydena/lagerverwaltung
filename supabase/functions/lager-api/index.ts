@@ -22,11 +22,12 @@ const PRODUCT = "Vaydena Lager";
 const OPERATOR_MAIL = "kontakt@vaydena.de";
 
 type Plan = { label: string; users: number; items: number; price: { monat: number; jahr: number } };
+// users: 0 = kein Nutzerlimit. Business ist nicht mehr öffentlich buchbar, nur noch über den Betreiber-Bereich.
 const PLANS: Record<string, Plan> = {
-  trial:    { label: "Test",     users: 10, items: 10000,   price: { monat: 0,    jahr: 0 } },
-  starter:  { label: "Starter",  users: 2,  items: 1000,    price: { monat: 1900, jahr: 19000 } },
-  team:     { label: "Team",     users: 10, items: 10000,   price: { monat: 4900, jahr: 49000 } },
-  business: { label: "Business", users: 30, items: 1000000, price: { monat: 9900, jahr: 99000 } },
+  trial:    { label: "Test",     users: 0,  items: 25000,   price: { monat: 0,    jahr: 0 } },
+  starter:  { label: "Starter",  users: 0,  items: 2500,    price: { monat: 900,  jahr: 9000 } },
+  team:     { label: "Team",     users: 0,  items: 25000,   price: { monat: 1900, jahr: 19000 } },
+  business: { label: "Business", users: 0,  items: 1000000, price: { monat: 9900, jahr: 99000 } },
 };
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const GRACE_DAYS = 7;
@@ -607,7 +608,7 @@ Deno.serve(async (req: Request) => {
       const role = body.role === "admin" ? "admin" : "mitarbeiter";
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json({ error: "bad_email" }, 400);
       const cnt = await sql`select count(*)::int as n from lager.members where tenant_id = ${tid} and active = true`;
-      if (cnt[0].n >= plan.users) return json({ error: "limit_users", limit: plan.users }, 400);
+      if (plan.users > 0 && cnt[0].n >= plan.users) return json({ error: "limit_users", limit: plan.users }, 400);
       const ex = await sql`select id from lager.members where tenant_id = ${tid} and lower(email) = ${email} limit 1`;
       if (ex.length) return json({ error: "already_member" }, 400);
       // Bestehendes Konto (auth.users ist mit anderen Vaydena-Produkten geteilt): KEIN Passwort-Link –
@@ -652,7 +653,7 @@ Deno.serve(async (req: Request) => {
       if (role !== null) await sql`update lager.members set role = ${role}, updated_at = now() where id = ${mid}`;
       if (active === true) {
         const cnt = await sql`select count(*)::int as n from lager.members where tenant_id = ${tid} and active = true and id <> ${mid}`;
-        if (cnt[0].n >= plan.users) return json({ error: "limit_users", limit: plan.users }, 400);
+        if (plan.users > 0 && cnt[0].n >= plan.users) return json({ error: "limit_users", limit: plan.users }, 400);
       }
       if (active !== null) await sql`update lager.members set active = ${active}, updated_at = now() where id = ${mid}`;
       const ch: Record<string, unknown> = { email: row[0].email };
@@ -724,7 +725,7 @@ Deno.serve(async (req: Request) => {
       if (!isAdmin) return json({ error: "forbidden" }, 403);
       const p = String(body.plan || "");
       const period = String(body.period || "monat") === "jahr" ? "jahr" : "monat";
-      if (!["starter", "team", "business"].includes(p)) return json({ error: "bad_plan" }, 400);
+      if (!["starter", "team"].includes(p)) return json({ error: "bad_plan" }, 400);
       const open = await sql`select count(*)::int as n from lager.invoices where tenant_id = ${tid} and status = 'open'`;
       if (open[0].n >= 3) return json({ error: "too_many_open" }, 400);
       const inv = await createInvoice(tid, p, period);

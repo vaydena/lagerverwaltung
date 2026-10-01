@@ -1943,7 +1943,7 @@
       return '<div class="ph"><h1>Team</h1><div class="spacer"></div>' +
         '<button class="btn ghost sm" type="button" data-act="team-refresh" title="Neu laden">' + ic("refresh") + '</button>' +
         '<button class="btn primary sm" type="button" data-act="member-invite">' + ic("plus") + ' Einladen</button></div>' +
-        '<p class="help">Mitarbeiter scannen und buchen. Administratoren verwalten außerdem Lagerorte, Löschungen, Team, Firma und Abo. Der Tarif erlaubt ' + (lim.users || "–") + ' aktive Nutzer.</p>' +
+        '<p class="help">Mitarbeiter scannen und buchen. Administratoren verwalten außerdem Lagerorte, Löschungen, Team, Firma und Abo. ' + (lim.users ? 'Der Tarif erlaubt ' + lim.users + ' aktive Nutzer.' : 'Die Zahl der Nutzer ist nicht begrenzt.') + '</p>' +
         '<div class="card"><div class="tools"><span class="cnt" id="teamCnt"></span></div><div class="list" id="teamList"></div></div>' +
         (navigator.onLine ? "" : '<p class="note">Offline – angezeigt wird der letzte bekannte Stand. Einladungen und Änderungen sind nur online möglich.</p>');
     },
@@ -2083,9 +2083,8 @@
   // Firma & Abo
   // =====================================================================
   var PLANS = {
-    starter: { label: "Starter", monat: 1900, jahr: 19000, feats: ["2 Nutzer", "1.000 Artikel", "Beliebig viele Lagerorte", "Etiketten, Offline-Modus, Export", "E-Mail-Support"] },
-    team: { label: "Team", monat: 4900, jahr: 49000, hot: true, feats: ["10 Nutzer", "10.000 Artikel", "Rollen: Admin & Mitarbeiter", "Journal je Nutzer und Gerät", "Bevorzugter Support"] },
-    business: { label: "Business", monat: 9900, jahr: 99000, feats: ["30 Nutzer", "Artikel ohne praktische Grenze", "Alles aus Team", "Einrichtungshilfe", "Telefon-Support"] }
+    starter: { label: "Starter", monat: 900, jahr: 9000, feats: ["Unbegrenzt viele Nutzer", "2.500 Artikel", "Beliebig viele Lagerorte", "Etiketten, Offline-Modus, Export", "E-Mail-Support"] },
+    team: { label: "Team", monat: 1900, jahr: 19000, hot: true, feats: ["Unbegrenzt viele Nutzer", "25.000 Artikel", "Alles aus Starter", "Journal je Nutzer und Gerät", "Bevorzugter Support"] }
   };
   function invoiceLink(inv) { return "zahlung.html?r=" + encodeURIComponent(inv.access_token || ""); }
 
@@ -2195,13 +2194,13 @@
       var h = '<div class="ph"><h1>Firma &amp; Abo</h1></div>';
       if (!isAdmin()) {
         return h + '<div class="card"><h2>' + esc(t.name || "") + '</h2><dl class="kv"><dt>Tarif</dt><dd>' + esc(t.plan_label || t.plan || "–") + '</dd><dt>Status</dt><dd>' + esc(subText(t)) + '</dd>' +
-          '<dt>Nutzer</dt><dd>bis ' + esc(String(lim.users || "–")) + '</dd><dt>Artikel</dt><dd>bis ' + esc(nf.format(lim.items || 0)) + '</dd></dl>' +
+          '<dt>Nutzer</dt><dd>' + (lim.users ? 'bis ' + esc(String(lim.users)) : 'unbegrenzt') + '</dd><dt>Artikel</dt><dd>bis ' + esc(nf.format(lim.items || 0)) + '</dd></dl>' +
           '<p class="note">Tarif, Rechnungen und Firmendaten verwaltet der Administrator.</p></div>';
       }
       var statusCls = !sub.active ? " err" : (sub.reason === "grace" || (t.plan === "trial" && sub.days_left != null && sub.days_left <= 7) ? " warn" : "");
       var activeUsers = (S.members || []).filter(function (m) { return m.active !== false; }).length;
       h += '<div class="card' + statusCls + '"><h2>Abo</h2><dl class="kv"><dt>Tarif</dt><dd><b>' + esc(t.plan_label || t.plan || "–") + '</b></dd><dt>Status</dt><dd>' + esc(subText(t)) + '</dd>' +
-        '<dt>Nutzer</dt><dd>' + activeUsers + ' von ' + esc(String(lim.users || "–")) + '</dd><dt>Artikel</dt><dd>' + esc(nf.format(LVStore.itemCount())) + ' von ' + esc(nf.format(lim.items || 0)) + '</dd>' +
+        '<dt>Nutzer</dt><dd>' + activeUsers + (lim.users ? ' von ' + esc(String(lim.users)) : ' (unbegrenzt)') + '</dd><dt>Artikel</dt><dd>' + esc(nf.format(LVStore.itemCount())) + ' von ' + esc(nf.format(lim.items || 0)) + '</dd>' +
         (t.plan === "trial" ? '<dt>Testphase bis</dt><dd>' + esc(t.trial_ends_dmy || "–") + '</dd>' : '<dt>Bezahlt bis</dt><dd>' + esc(t.paid_until_dmy || "–") + '</dd>') + '</dl></div>';
       h += planResultHtml();
       h += '<div class="card"><h2>Tarif wählen</h2><p class="help">Alle Tarife: beliebig viele Lagerorte, Etiketten, Offline-Modus, CSV-Import und -Export. Preise ohne Umsatzsteuer (§ 19 UStG), keine automatische Verlängerung.</p>' +

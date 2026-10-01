@@ -213,7 +213,7 @@ async function stockOf(itemName) {
     await shot(page, "10-team");
     await go(page, "#firma", "Firma & Abo");
     t = await viewText(page);
-    check("Firma zeigt Tarife + Testphase", /Starter/.test(t) && /Business/.test(t) && /Test/.test(t), t.slice(0, 300));
+    check("Firma zeigt Tarife + Testphase", /Starter/.test(t) && /Team/.test(t) && !/Business/.test(t) && /Test/.test(t), t.slice(0, 300));
     await shot(page, "11-firma");
     await go(page, "#konto", "Konto");
     t = await viewText(page);

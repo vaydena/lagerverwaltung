@@ -20,11 +20,12 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const GRACE_DAYS = 7;
 
 type Plan = { label: string; users: number; items: number; price: { monat: number; jahr: number } };
+// users: 0 = kein Nutzerlimit. Business ist nicht mehr öffentlich buchbar, nur noch über den Betreiber-Bereich.
 const PLANS: Record<string, Plan> = {
-  trial:    { label: "Test",     users: 10, items: 10000,   price: { monat: 0,    jahr: 0 } },
-  starter:  { label: "Starter",  users: 2,  items: 1000,    price: { monat: 1900, jahr: 19000 } },
-  team:     { label: "Team",     users: 10, items: 10000,   price: { monat: 4900, jahr: 49000 } },
-  business: { label: "Business", users: 30, items: 1000000, price: { monat: 9900, jahr: 99000 } },
+  trial:    { label: "Test",     users: 0,  items: 25000,   price: { monat: 0,    jahr: 0 } },
+  starter:  { label: "Starter",  users: 0,  items: 2500,    price: { monat: 900,  jahr: 9000 } },
+  team:     { label: "Team",     users: 0,  items: 25000,   price: { monat: 1900, jahr: 19000 } },
+  business: { label: "Business", users: 0,  items: 1000000, price: { monat: 9900, jahr: 99000 } },
 };
 
 // Auth-Konto darf nur gelöscht werden, wenn die Lagerverwaltung es selbst angelegt hat (Einladung),
