@@ -100,7 +100,8 @@ const uuid = () => crypto.randomUUID();
   console.log("5) pull inkrementell + Bestand");
   r = await api({ action: "pull", since: since1 });
   const st = (it, lo) => (r.stock || []).find((s) => s.item_id === it && s.location_id === lo)?.qty;
-  check("pull incremental: 2 Artikel, 1 Lagerort, 4 Bewegungen", r.ok && r.full === false && r.items?.length === 2 && r.locations?.length === 1 && r.movements?.length === 4, { items: r.items?.length, locs: r.locations?.length, mov: r.movements?.length });
+  // Der Cursor überlappt um 2 Minuten (siehe pull in lager-api): der frisch angelegte L-001 darf erneut mitkommen.
+  check("pull incremental: 2 Artikel, neuer Lagerort, 4 Bewegungen", r.ok && r.full === false && r.items?.length === 2 && r.locations?.some((l) => l.id === loc2) && r.locations.length <= 2 && r.movements?.length === 4, { items: r.items?.length, locs: r.locations?.length, mov: r.movements?.length });
   check("item update angekommen (name, min_stock)", r.items?.find((i) => i.id === itemA)?.name === "Schrauben M6 x 30" && r.items?.find((i) => i.id === itemA)?.min_stock === 8, r.items);
   check("stock A Hauptlager = 5", st(itemA, mainLoc) === 5, r.stock);
   check("stock A Regal 2 = 2", st(itemA, loc2) === 2, r.stock);
@@ -174,9 +175,14 @@ const uuid = () => crypto.randomUUID();
 
   console.log("10) Aufräumen");
   r = await adm({ action: "delete_tenant", tenant_id: tenantId, confirm: "falsch" }); check("delete confirm mismatch", r.error === "confirm_mismatch", r);
-  r = await adm({ action: "delete_tenant", tenant_id: tenantId, confirm: company }); check("delete_tenant (2 Auth-Nutzer gelöscht)", r.ok && r.deleted_users === 2, r);
+  r = await adm({ action: "delete_tenant", tenant_id: tenantId, confirm: company }); check("delete_tenant (2 Mitglieder, benutzte Auth-Konten bleiben)", r.ok && r.members === 2 && r.deleted_users === 0, r);
   r = await api({ action: "me" }); check("me nach Löschung -> not registered", r.registered === false, r);
-  const lj3 = await login(email, password); check("login nach Löschung schlägt fehl", !lj3.access_token, lj3.error || lj3.error_code);
+  // auth.users ist mit anderen Vaydena-Produkten geteilt: ein bereits benutztes Konto bleibt bestehen (authDeletable),
+  // hat aber keinen Lager-Zugang mehr.
+  const lj3 = await login(email, password); token = lj3.access_token;
+  check("Auth-Konto bleibt nach Löschung bestehen", !!token, lj3.error || lj3.error_code);
+  r = await api({ action: "me" }); check("neuer Login nach Löschung -> not registered", r.registered === false, r);
+  r = await api({ action: "pull" }); check("pull nach Löschung -> 403 not_registered", r.status === 403 && r.error === "not_registered" && !r.items, r.status);
 
   console.log(failures ? `\n${failures} FEHLER` : "\nALLE TESTS OK");
   process.exit(failures ? 1 : 0);
